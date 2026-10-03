@@ -8,11 +8,8 @@ use napi_derive::napi;
 #[napi]
 #[derive(Clone, Copy)]
 pub enum Algorithm {
-  /// Optimizes against GPU cracking attacks but vulnerable to side-channels.
   Argon2d,
-  /// Optimized to resist side-channel attacks.
   Argon2i,
-  /// Hybrid that mixes Argon2i and Argon2d passes.
   Argon2id,
 }
 
@@ -39,9 +36,7 @@ impl Algorithm {
 #[napi]
 #[derive(Clone, Copy)]
 pub enum Version {
-  /// Version 16 (0x10 in hex)
   V0x10,
-  /// Default value: Version 19 (0x13 in hex)
   V0x13,
 }
 
@@ -74,6 +69,19 @@ pub struct Options {
   pub version: Option<Version>,
   pub secret: Option<Uint8Array>,
   pub salt: Option<Uint8Array>,
+}
+
+#[napi(object, object_to_js = false)]
+#[derive(Default)]
+pub struct Argon2Parameters {
+  pub message: Option<Either<String, Uint8Array>>,
+  pub nonce: Option<Either<String, Uint8Array>>,
+  pub parallelism: Option<u32>,
+  pub tag_length: Option<u32>,
+  pub memory: Option<u32>,
+  pub passes: Option<u32>,
+  pub secret: Option<Uint8Array>,
+  pub associated_data: Option<Uint8Array>,
 }
 
 #[napi(object)]
@@ -169,6 +177,14 @@ fn password_bytes(password: Either<String, Uint8Array>) -> Vec<u8> {
   }
 }
 
+fn either_bytes(input: Option<Either<String, Uint8Array>>) -> Vec<u8> {
+  match input {
+    Some(Either::A(s)) => s.into_bytes(),
+    Some(Either::B(b)) => b.to_vec(),
+    None => Vec::new(),
+  }
+}
+
 fn utf8_input(value: Either<String, Uint8Array>) -> Result<String> {
   match value {
     Either::A(s) => Ok(s),
@@ -178,13 +194,93 @@ fn utf8_input(value: Either<String, Uint8Array>) -> Result<String> {
   }
 }
 
-fn generate_salt() -> [u8; argon2_rust::RANDOM_SALT_LEN] {
+fn generate_salt() -> Result<[u8; argon2_rust::RANDOM_SALT_LEN]> {
   use ring::rand::SecureRandom;
   let mut salt = [0u8; argon2_rust::RANDOM_SALT_LEN];
   ring::rand::SystemRandom::new()
     .fill(&mut salt)
-    .expect("Failed to generate random salt");
-  salt
+    .map_err(|_| Error::new(Status::GenericFailure, "Failed to generate random salt"))?;
+  Ok(salt)
+}
+
+fn parse_algorithm_str(algorithm: &str) -> Result<Argon2Algorithm> {
+  match algorithm.to_lowercase().as_str() {
+    "argon2d" => Ok(Argon2Algorithm::Argon2d),
+    "argon2i" => Ok(Argon2Algorithm::Argon2i),
+    "argon2id" => Ok(Argon2Algorithm::Argon2id),
+    _ => Err(Error::new(
+      Status::InvalidArg,
+      format!("Unsupported Argon2 algorithm: {algorithm}"),
+    )),
+  }
+}
+
+fn derive_raw_argon2(
+  algorithm: &str,
+  params: Argon2Parameters,
+) -> Result<Vec<u8>> {
+  let alg = parse_algorithm_str(algorithm)?;
+  let mut builder = Params::builder();
+  if let Some(mem) = params.memory {
+    builder = builder.memory(Memory::kib(mem as u64));
+  }
+  if let Some(passes) = params.passes {
+    builder = builder.passes(passes);
+  }
+  if let Some(p) = params.parallelism {
+    builder = builder.lanes(p).threads(thread_budget(p));
+  }
+  if let Some(tag_len) = params.tag_length {
+    builder = builder.tag_len(TagLen::bytes(tag_len as u64));
+  }
+  let p = builder.build().map_err(map_error)?;
+  let hasher = Argon2::new(alg, Argon2Version::V0x13, p);
+
+  let msg = either_bytes(params.message);
+  let salt = either_bytes(params.nonce);
+  let secret = params.secret.as_ref().map(|s| s.as_ref()).unwrap_or(&[]);
+  let ad = params.associated_data.as_ref().map(|a| a.as_ref()).unwrap_or(&[]);
+
+  hasher.hash_with_ad(&msg, &salt, secret, ad).map_err(map_error)
+}
+
+#[napi(js_name = "argon2Sync")]
+pub fn argon2_sync_node(
+  algorithm: String,
+  parameters: Argon2Parameters,
+) -> Result<Buffer> {
+  let raw = derive_raw_argon2(&algorithm, parameters)?;
+  Ok(Buffer::from(raw))
+}
+
+pub struct Argon2NodeTask {
+  algorithm: String,
+  parameters: Argon2Parameters,
+}
+
+#[napi]
+impl Task for Argon2NodeTask {
+  type Output = Vec<u8>;
+  type JsValue = Buffer;
+
+  fn compute(&mut self) -> Result<Self::Output> {
+    derive_raw_argon2(&self.algorithm, std::mem::take(&mut self.parameters))
+  }
+
+  fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+    Ok(Buffer::from(output))
+  }
+}
+
+#[napi(js_name = "argon2")]
+pub fn argon2_node(
+  algorithm: String,
+  parameters: Argon2Parameters,
+) -> AsyncTask<Argon2NodeTask> {
+  AsyncTask::new(Argon2NodeTask {
+    algorithm,
+    parameters,
+  })
 }
 
 fn hash_encoded(argon2: &Argon2, password: &[u8], salt: &[u8], secret: &[u8]) -> Result<String> {
@@ -226,7 +322,7 @@ impl Task for HashTask {
     match self.options.salt() {
       Some(salt) => hash_encoded(&hasher, &self.password, salt, secret),
       None => {
-        let salt = generate_salt();
+        let salt = generate_salt()?;
         hash_encoded(&hasher, &self.password, &salt, secret)
       }
     }
@@ -282,7 +378,7 @@ impl Task for RawHashTask {
     match self.options.salt() {
       Some(salt) => hash_raw_bytes(&hasher, &self.password, salt, secret),
       None => {
-        let salt = generate_salt();
+        let salt = generate_salt()?;
         hash_raw_bytes(&hasher, &self.password, &salt, secret)
       }
     }
