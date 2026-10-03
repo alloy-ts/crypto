@@ -1,121 +1,153 @@
-import { readFileSync } from 'fs'
-import { resolve } from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
+import process from 'node:process'
 import { createBuildCommand, NapiCli } from '@napi-rs/cli'
 
-const rawArgs = process.argv.slice(2)
-const isTargetAll =
-  rawArgs.includes('--target-all') ||
-  rawArgs.includes('--all') ||
-  rawArgs.includes('--use-cross')
+const DEFAULT_TARGET_MATRIX = [
+  { target: 'x86_64-apple-darwin', flags: '-x' },
+  { target: 'aarch64-apple-darwin', flags: '-x' },
+  { target: 'x86_64-pc-windows-msvc', flags: '-x' },
+  { target: 'i686-pc-windows-msvc', flags: '-x' },
+  { target: 'aarch64-pc-windows-msvc', flags: '-x' },
+  { target: 'x86_64-unknown-linux-gnu', flags: '--use-napi-cross' },
+  { target: 'aarch64-unknown-linux-gnu', flags: '--use-napi-cross' },
+  { target: 'x86_64-unknown-linux-musl', flags: '-x' },
+  { target: 'aarch64-unknown-linux-musl', flags: '-x' },
+  { target: 'armv7-unknown-linux-gnueabihf', flags: '--use-napi-cross' },
+  { target: 'powerpc64le-unknown-linux-gnu', flags: '--use-napi-cross' },
+  { target: 's390x-unknown-linux-gnu', flags: '--use-napi-cross' },
+  { target: 'wasm32-wasip1-threads', flags: '-x' },
+]
 
-const isDryRun = rawArgs.includes('--dry-run')
-
-// Clean custom trigger flags before passing to NapiCli createBuildCommand
-const cleanArgs = rawArgs.filter(
-  (arg) => arg !== '--target-all' && arg !== '--all' && arg !== '--dry-run' && arg !== '--use-cross'
-)
-
-const build = createBuildCommand(cleanArgs)
-const options = build.getOptions()
-const cli = new NapiCli()
-
-/**
- * Dynamically reads the target matrix from package.json's `napi.targets` array
- * to avoid hardcoding target triples in scripts.
- */
-function getTargetsFromPackageJson() {
+function loadNapiTargets() {
   try {
-    const pkgPath = resolve(process.cwd(), 'package.json')
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
-    return pkg.napi?.targets || []
+    const pkgPath = path.resolve(process.cwd(), 'package.json')
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+    if (Array.isArray(pkg.napi?.targets) && pkg.napi.targets.length > 0) {
+      return pkg.napi.targets
+    }
   } catch {
-    return []
+    // Ignore error and use default
   }
+  return DEFAULT_TARGET_MATRIX.map((t) => t.target)
 }
 
-/**
- * Checks CLI flags like `--cross-compile` / `-x`, `--use-napi-cross`, or `--use-cross`.
- * If explicit options were passed to `createBuildCommand`, uses them;
- * otherwise applies sensible target-specific defaults for cross-building.
- */
-function determineCrossFlags(target) {
-  if (options.useNapiCross || options.useCross || options.crossCompile) {
-    return {
-      useNapiCross: options.useNapiCross,
-      useCross: options.useCross,
-      crossCompile: options.crossCompile,
-    }
+function parseArgs() {
+  const args = process.argv.slice(2)
+
+  const useCross = args.includes('--use-cross')
+  const buildAll = args.includes('--target-all') || args.includes('--all') || useCross
+  const isRelease = args.includes('--release') || args.includes('-r')
+  const dryRun = args.includes('--dry-run')
+
+  const useNapiCross = args.includes('--use-napi-cross')
+  const crossCompile = args.includes('-x') || args.includes('--cross-compile')
+
+  let targetFilter = null
+  const targetIdx = args.indexOf('--target')
+  if (targetIdx !== -1 && args[targetIdx + 1]) {
+    targetFilter = args[targetIdx + 1]
   }
 
-  // Cross-build defaults based on target triple
-  if (
-    target.includes('linux-gnu') ||
-    target.includes('gnueabihf') ||
-    target.includes('powerpc') ||
-    target.includes('s390x')
-  ) {
-    return { useNapiCross: true }
-  }
+  const filteredArgs = args.filter(
+    (arg) =>
+      arg !== '--target-all' &&
+      arg !== '--all' &&
+      arg !== '--dry-run' &&
+      arg !== '--use-cross'
+  )
 
-  return { crossCompile: true }
+  return {
+    targetFilter,
+    isRelease,
+    dryRun,
+    buildAll,
+    useCross,
+    useNapiCross,
+    crossCompile,
+    filteredArgs,
+  }
 }
 
 async function runBuild() {
-  if (isTargetAll) {
-    const targets = getTargetsFromPackageJson()
-    if (targets.length === 0) {
-      console.warn('⚠️ No targets found in package.json napi.targets')
-      return
-    }
+  const {
+    targetFilter,
+    isRelease,
+    dryRun,
+    buildAll,
+    useCross,
+    useNapiCross,
+    crossCompile,
+    filteredArgs,
+  } = parseArgs()
 
-    console.log(`\n🚀 Starting Cross-Build for ${targets.length} target(s) listed in package.json...`)
+  const buildCommand = createBuildCommand(filteredArgs)
+  const options = buildCommand.getOptions()
+  const cli = new NapiCli()
 
-    for (const target of targets) {
-      const crossFlags = determineCrossFlags(target)
-      const buildOptions = {
-        ...options,
-        ...crossFlags,
-        target,
-        outputDir: options.outputDir || './dist',
-        cargoOptions: build.cargoOptions,
-      }
+  const pkgNapiTargets = loadNapiTargets()
 
-      console.log(`\n⚙️  Building target: ${target}`)
-      console.log(
-        `   Options: target=${target}, release=${Boolean(buildOptions.release)}, crossFlags=${JSON.stringify(crossFlags)}`
-      )
+  let targetsToBuild = []
 
-      if (isDryRun) {
-        console.log(`   [Dry Run] Skipped build execution.`)
-        continue
-      }
-
-      const { task } = await cli.build(buildOptions)
-      await task
-      console.log(`✅ Target ${target} built successfully.`)
-    }
-
-    console.log(`\n✨ All targets cross-built successfully!`)
+  if (targetFilter) {
+    targetsToBuild = [targetFilter]
+  } else if (buildAll) {
+    targetsToBuild = pkgNapiTargets
   } else {
-    if (isDryRun) {
-      console.log(`[Dry Run] Single build options:`, {
-        ...options,
-        outputDir: options.outputDir || './dist',
-        cargoOptions: build.cargoOptions,
-      })
-      return
+    targetsToBuild = [null]
+  }
+
+  console.log(`\n🚀 Starting Local Build Pipeline (${targetsToBuild.length} target(s))...`)
+
+  for (const target of targetsToBuild) {
+    const isNapiCrossTarget =
+      target &&
+      (target.includes('gnueabihf') ||
+        target.includes('powerpc') ||
+        target.includes('s390x') ||
+        target.includes('linux-gnu'))
+
+    const effectiveUseNapiCross = useNapiCross || (target ? isNapiCrossTarget : false)
+    const effectiveCrossCompile = crossCompile || (target ? !isNapiCrossTarget : false)
+
+    console.log(`\n⚙️  Building target: ${target || 'default host'}`)
+
+    if (dryRun) {
+      console.log(`   [Dry Run] Skipped build execution for ${target || 'default host'}.`)
+      continue
     }
 
-    const { task } = await cli.build({
-      ...options,
-      outputDir: options.outputDir || './dist',
-      cargoOptions: build.cargoOptions,
-    })
-    await task
+    try {
+      const buildOpts = {
+        ...options,
+        cwd: options.cwd || process.cwd(),
+        outputDir: options.outputDir || './dist',
+        release: isRelease,
+        cargoOptions: buildCommand.cargoOptions,
+      }
+
+      if (target) {
+        buildOpts.target = target
+      }
+      if (useCross) buildOpts.useCross = true
+      if (effectiveUseNapiCross) buildOpts.useNapiCross = true
+      if (effectiveCrossCompile) buildOpts.crossCompile = true
+
+      const { task } = await cli.build(buildOpts)
+      await task
+      console.log(`✅ Target ${target || 'default host'} built successfully.`)
+    } catch (err) {
+      console.error(`❌ Target ${target || 'default host'} failed to build:`, err.message)
+      if (!buildAll) {
+        process.exit(1)
+      }
+    }
   }
+
+  console.log(`\n✨ Build process complete!`)
 }
 
 runBuild().catch((err) => {
-  console.error('Fatal build error:', err)
+  console.error('Fatal error during build:', err)
   process.exit(1)
 })

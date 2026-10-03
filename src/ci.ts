@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -16,16 +17,31 @@ const envVars = {
 
 interface CIStep {
   title: string;
-  command: string;
+  command: string | (() => void);
 }
 
 const steps: CIStep[] = [
-  { title: "Check & Lint", command: "vp check src" },
-  { title: "Native Addon Build", command: "npm run build" },
+  { title: "Check & Lint (ci:check)", command: "vp check src" },
+  { title: "Native Addon Build (ci:build)", command: "npm run build" },
   { title: "Unit Tests (VP)", command: "vp test src/main.test.ts" },
   { title: "Unit Tests (CJS)", command: "npm test" },
-  { title: "Cross-Build Matrix (Dry Run)", command: "node build.mjs --target-all --dry-run" },
-  { title: "Publish Check", command: "npm pack --dry-run" },
+  { title: "Cross-Build Matrix (Dry Run)", command: "node build.mjs --use-cross --dry-run" },
+  {
+    title: "Prepublish Tarball Creation (test:prepublish)",
+    command: "npm pack",
+  },
+  {
+    title: "Publish From Prepublished Tarball (Dry Run)",
+    command: () => {
+      const files = fs.readdirSync(process.cwd()).filter((f) => f.endsWith(".tgz"));
+      if (files.length === 0) {
+        throw new Error("No prepublished .tgz tarball found for publishing");
+      }
+      const tarball = files[0];
+      console.log(`    Publishing directly from prepublished tarball: ${tarball}`);
+      execSync(`npm publish ${tarball} --dry-run`, { stdio: "inherit", env: envVars });
+    },
+  },
 ];
 
 let passed = 0;
@@ -35,10 +51,14 @@ const startTime = Date.now();
 for (let i = 0; i < steps.length; i++) {
   const step = steps[i];
   console.log(`▶️  Step ${i + 1}/${steps.length}: [${step.title}]`);
-  console.log(`    Command: "${step.command}"`);
 
   try {
-    execSync(step.command, { stdio: "inherit", env: envVars });
+    if (typeof step.command === "function") {
+      step.command();
+    } else {
+      console.log(`    Command: "${step.command}"`);
+      execSync(step.command, { stdio: "inherit", env: envVars });
+    }
     console.log(`✅ [${step.title}] Passed.\n`);
     passed++;
   } catch (err: any) {
