@@ -1,5 +1,5 @@
 {
-  "name": "my-addon",
+  "name": "@lib/crypto",
   "version": "0.1.0",
   "main": "index.js",
   "types": "index.d.ts",
@@ -15,7 +15,7 @@
     "build:release": "node build.mjs --platform --release",
     "dev": "vp pack --watch",
     "start": "vp run src/main.ts",
-    "test": "node --test test.cjs",
+    "test": "node --test test.cjs src/*.test.ts",
     "check": "vp check",
     "fmt": "vp fmt",
     "lint": "vp lint",
@@ -23,7 +23,7 @@
     "prepare": "vp config"
   },
   "napi": {
-    "binaryName": "my-addon",
+    "binaryName": "lib-crypto",
     "targets": [
       "x86_64-apple-darwin",
       "aarch64-apple-darwin",

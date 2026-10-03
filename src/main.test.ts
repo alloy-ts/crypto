@@ -1,6 +1,8 @@
-import { expect, test } from "vite-plus/test";
-import { main } from "./main.ts";
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createHash } from "../index.js";
 
-test("main returns Hello, world!", () => {
-  expect(main()).toBe("Hello, world!");
+test("crypto exports work in ts", () => {
+  const hash = createHash("sha256").update("test").digest("hex");
+  assert.equal(typeof hash, "string");
 });
