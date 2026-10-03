@@ -14,7 +14,7 @@ export default defineConfig({
     },
   },
   staged: {
-    "*": "vp check src scripts",
+    "*": "vp check src",
   },
   fmt: {},
   lint: {
@@ -25,7 +25,7 @@ export default defineConfig({
     cache: true,
     tasks: {
       "ci:check": {
-        command: "vp check src scripts",
+        command: "vp check src",
       },
       "ci:test": {
         command: "vp test src/main.test.ts",
@@ -37,13 +37,13 @@ export default defineConfig({
         },
       },
       "ci:cross-build": {
-        command: "node scripts/cross-build.mjs --dry-run --all",
+        command: "node build.mjs --target-all --dry-run",
       },
       "ci:publish-dry-run": {
         command: "npm pack --dry-run",
       },
       ci: {
-        command: "node scripts/local-ci.mjs",
+        command: "tsx src/ci.ts",
       },
     },
   },

@@ -16,12 +16,11 @@
     "dev": "vp pack --watch",
     "start": "vp run src/main.ts",
     "test": "node --test test.cjs",
-    "check": "vp check",
+    "check": "vp check src",
     "fmt": "vp fmt",
     "lint": "vp lint",
-    "ci": "vp run ci",
-    "ci:local": "node scripts/local-ci.mjs",
-    "ci:cross-build": "node scripts/cross-build.mjs",
+    "ci:local": "tsx src/ci.ts",
+    "ci:cross-build": "node build.mjs --target-all",
     "prepublishOnly": "vp run build",
     "prepare": "vp config"
   },
@@ -29,6 +28,7 @@
     "@napi-rs/cli": "^3",
     "@types/node": "^26.6.2",
     "@voidzero-dev/vite-task-client": "^0.2.0",
+    "tsx": "^4.19.3",
     "vite-plus": "^1.0.0-rc.1",
     "yaml": "^2.9.1"
   },

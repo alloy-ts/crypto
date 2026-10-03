@@ -51,77 +51,44 @@ This project supports running complete CI jobs locally without requiring externa
 Using `vite-plus` (`vp`) and `@voidzero-dev/vite-task-client`, local CI tasks are defined in `vite.config.ts` and leverage content-addressed task caching:
 
 ```bash
-# Run the local CI task pipeline with task caching
+# Run the complete local CI task pipeline with task caching
 vp run ci
 ```
 
 Specific local CI task steps can also be executed individually:
 
 ```bash
-vp run ci:check        # Code formatting and lint checks
-vp run ci:test         # Unit tests
-vp run ci:build        # Host native build
-vp run ci:cross-build  # Cross-build target matrix
+vp run ci:check            # Code formatting and lint checks
+vp run ci:test             # Unit tests
+vp run ci:build            # Host native build
+vp run ci:cross-build      # Dry-run cross-build target matrix
 vp run ci:publish-dry-run  # Dry-run package publish verification
 ```
 
-### Declarative YAML CI Workflows (`.ci.yml`)
+### TypeScript Local CI Pipeline (`src/ci.ts`)
 
-Local CI steps can be written in a simple YAML workflow format (`.ci.yml`):
-
-```yaml
-name: Local CI Pipeline
-
-jobs:
-  check:
-    name: Check & Lint
-    steps:
-      - uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version: '22'
-          cache: true
-      - run: vp check src scripts
-
-  build:
-    name: Native Addon Build
-    steps:
-      - run: npm run build
-
-  test:
-    name: Unit Tests
-    steps:
-      - run: vp test src/main.test.ts
-      - run: npm test
-
-  cross-build:
-    name: Cross-Build Matrix
-    steps:
-      - run: node scripts/cross-build.mjs --dry-run --all
-
-  publish:
-    name: Publish Check
-    steps:
-      - run: npm pack --dry-run
-```
-
-Execute the local YAML CI runner natively:
+Instead of parsing YAML, local CI steps are orchestrated in a clean, executable TypeScript file (`src/ci.ts`):
 
 ```bash
+# Run the local TypeScript CI pipeline script
 npm run ci:local
 ```
 
-### Native Cross-Building
+### Direct Cross-Building (`build.mjs`)
 
-Cross-compilation for foreign target matrix (`x86_64-apple-darwin`, `aarch64-apple-darwin`, `x86_64-pc-windows-msvc`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-musl`, etc.) is supported directly on the host using `@napi-rs/cli` and `cargo-zigbuild` / `cargo-xwin` / `--use-napi-cross`:
+`build.mjs` dynamically reads the target matrix from `napi.targets` in `package.json` and supports direct cross-building:
 
 ```bash
-# Cross-build for a specific target natively:
-node scripts/cross-build.mjs --target x86_64-unknown-linux-gnu
+# Build for all targets listed in package.json napi.targets:
+npm run ci:cross-build
 
-# Run dry-run cross-build for all targets:
-node scripts/cross-build.mjs --dry-run --all
+# Dry-run cross-build configuration for all targets:
+node build.mjs --target-all --dry-run
+
+# Build for a specific target:
+node build.mjs --target x86_64-unknown-linux-gnu --use-napi-cross
 ```
 
 ### Pre-Commit Hooks
 
-Git pre-commit hooks are configured via `vite.config.ts` (`staged`). Whenever you commit code, `vp check src scripts` automatically runs on staged files to guarantee code quality.
+Git pre-commit hooks are configured via `vite.config.ts` (`staged`). Whenever you commit code, `vp check src` automatically runs on staged files to guarantee code quality.
