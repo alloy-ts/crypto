@@ -1,0 +1,36 @@
+name: Local CI Pipeline
+
+env:
+  DEBUG: 'napi:*'
+  MACOSX_DEPLOYMENT_TARGET: '10.13'
+
+jobs:
+  check:
+    name: Check & Lint
+    steps:
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: '22'
+          cache: true
+      - run: vp check src scripts
+
+  build:
+    name: Native Addon Build
+    steps:
+      - run: npm run build
+
+  test:
+    name: Unit Tests
+    steps:
+      - run: vp test src/main.test.ts
+      - run: npm test
+
+  cross-build:
+    name: Cross-Build Matrix
+    steps:
+      - run: node scripts/cross-build.mjs --dry-run --all
+
+  publish:
+    name: Publish Check
+    steps:
+      - run: npm pack --dry-run
