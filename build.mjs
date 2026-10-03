@@ -3,16 +3,26 @@ import { resolve } from 'path'
 import { createBuildCommand, NapiCli } from '@napi-rs/cli'
 
 const rawArgs = process.argv.slice(2)
-const isTargetAll = rawArgs.includes('--target-all') || rawArgs.includes('--all')
+const isTargetAll =
+  rawArgs.includes('--target-all') ||
+  rawArgs.includes('--all') ||
+  rawArgs.includes('--use-cross')
+
 const isDryRun = rawArgs.includes('--dry-run')
 
-// Clean custom flags before passing to NapiCli createBuildCommand
-const cleanArgs = rawArgs.filter((arg) => arg !== '--target-all' && arg !== '--all' && arg !== '--dry-run')
+// Clean custom trigger flags before passing to NapiCli createBuildCommand
+const cleanArgs = rawArgs.filter(
+  (arg) => arg !== '--target-all' && arg !== '--all' && arg !== '--dry-run' && arg !== '--use-cross'
+)
 
 const build = createBuildCommand(cleanArgs)
 const options = build.getOptions()
 const cli = new NapiCli()
 
+/**
+ * Dynamically reads the target matrix from package.json's `napi.targets` array
+ * to avoid hardcoding target triples in scripts.
+ */
 function getTargetsFromPackageJson() {
   try {
     const pkgPath = resolve(process.cwd(), 'package.json')
@@ -23,8 +33,12 @@ function getTargetsFromPackageJson() {
   }
 }
 
+/**
+ * Checks CLI flags like `--cross-compile` / `-x`, `--use-napi-cross`, or `--use-cross`.
+ * If explicit options were passed to `createBuildCommand`, uses them;
+ * otherwise applies sensible target-specific defaults for cross-building.
+ */
 function determineCrossFlags(target) {
-  // If explicitly specified in options, respect them
   if (options.useNapiCross || options.useCross || options.crossCompile) {
     return {
       useNapiCross: options.useNapiCross,
@@ -67,7 +81,9 @@ async function runBuild() {
       }
 
       console.log(`\n⚙️  Building target: ${target}`)
-      console.log(`   Options: target=${target}, release=${Boolean(buildOptions.release)}, crossFlags=${JSON.stringify(crossFlags)}`)
+      console.log(
+        `   Options: target=${target}, release=${Boolean(buildOptions.release)}, crossFlags=${JSON.stringify(crossFlags)}`
+      )
 
       if (isDryRun) {
         console.log(`   [Dry Run] Skipped build execution.`)
