@@ -3,7 +3,7 @@ use napi_derive::napi;
 use rsa::pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey};
 use rsa::pkcs8::{DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey};
 use rsa::rand_core::OsRng;
-use sha2::digest::{Digest, DynDigest, FixedOutputReset};
+use rsa::sha2::digest::{Digest, DynDigest, FixedOutputReset};
 use rsa::traits::{PrivateKeyParts, PublicKeyParts};
 use rsa::{BigUint, Oaep, Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
 
@@ -150,10 +150,7 @@ fn validate_oaep_digest(hash: Option<&str>) -> Result<()> {
   if let Some(h) = hash {
     match h.to_lowercase().as_str() {
       "sha1" | "sha256" | "sha384" | "sha512" => Ok(()),
-      _ => Err(Error::new(
-        Status::InvalidArg,
-        "ERR_OSSL_EVP_INVALID_DIGEST",
-      )),
+      _ => Err(Error::new(Status::InvalidArg, "ERR_OSSL_EVP_INVALID_DIGEST")),
     }
   } else {
     Ok(())
@@ -191,7 +188,12 @@ fn rsa_no_padding_encrypt(pub_key: &RsaPublicKey, buffer: &[u8]) -> Result<Vec<u
     return Err(Error::new(Status::GenericFailure, "RSA encryption failed: message too long"));
   }
   let m = BigUint::from_bytes_be(buffer);
-  let c = m.modpow(pub_key.e(), pub_key.n());
+  let n = pub_key.n();
+  let e = pub_key.e();
+  if m >= *n {
+    return Err(Error::new(Status::GenericFailure, "RSA encryption failed: data too large for key size"));
+  }
+  let c = m.modpow(e, n);
   let mut bytes = c.to_bytes_be();
   if bytes.len() < key_size {
     let mut padded = vec![0u8; key_size - bytes.len()];
@@ -204,7 +206,9 @@ fn rsa_no_padding_encrypt(pub_key: &RsaPublicKey, buffer: &[u8]) -> Result<Vec<u
 fn rsa_no_padding_decrypt(priv_key: &RsaPrivateKey, buffer: &[u8]) -> Result<Vec<u8>> {
   let key_size = priv_key.size();
   let c = BigUint::from_bytes_be(buffer);
-  let m = c.modpow(priv_key.d(), priv_key.n());
+  let n = priv_key.n();
+  let d = priv_key.d();
+  let m = c.modpow(d, n);
   let mut bytes = m.to_bytes_be();
   if bytes.len() < key_size {
     let mut padded = vec![0u8; key_size - bytes.len()];

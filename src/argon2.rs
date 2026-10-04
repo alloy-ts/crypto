@@ -1,6 +1,6 @@
 use argon2_rust::{
   params::{Memory, TagLen},
-  Algorithm as Argon2Algorithm, Argon2, Error as Argon2Error, Params, Version as Argon2Version,
+  Algorithm as Argon2Algorithm, Argon2, Params, Version as Argon2Version,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -40,7 +40,7 @@ fn map_error(err: Argon2Error) -> Error {
 
 fn either_bytes(input: Option<Either<String, Uint8Array>>) -> Vec<u8> {
   match input {
-    Some(Either::A(s)) => s.into_bytes(),
+    Some(Either::A(s)) => s.as_bytes().to_vec(),
     Some(Either::B(b)) => b.to_vec(),
     None => Vec::new(),
   }
