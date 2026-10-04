@@ -29,3 +29,16 @@ test('pbkdf2 async compatibility with node:crypto', async () => {
 
   assert.equal(actual, expected)
 })
+
+test('pbkdf2Sync with Uint8Array password and salt', () => {
+  const password = new Uint8Array([112, 97, 115, 115])
+  const salt = new Uint8Array([115, 97, 108, 116])
+  const iterations = 2000
+  const keylen = 64
+  const digest = 'sha256'
+
+  const expected = crypto.pbkdf2Sync(password, salt, iterations, keylen, digest).toString('hex')
+  const actual = pbkdf2Sync(password, salt, iterations, keylen, digest).toString('hex')
+
+  assert.equal(actual, expected)
+})

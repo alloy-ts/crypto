@@ -28,3 +28,21 @@ test('HMAC sha512 base64 digest', () => {
 
   assert.equal(actual, expected)
 })
+
+test('HMAC with binary Uint8Array key and multi-chunk update', () => {
+  const secret = new Uint8Array([10, 20, 30, 40, 50])
+  const chunk1 = 'Part 1 - '
+  const chunk2 = 'Part 2'
+
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(chunk1)
+    .update(chunk2)
+    .digest('hex')
+
+  const hmac = createHmac('sha256', secret)
+  hmac.update(chunk1).update(chunk2)
+  const actual = hmac.digest('hex')
+
+  assert.equal(actual, expected)
+})

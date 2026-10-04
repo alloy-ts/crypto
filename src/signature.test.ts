@@ -11,18 +11,24 @@ test('Sign and verify with Ed25519', () => {
 
   const isValid = verify('ed25519', message, pair.publicKey, sig)
   assert.equal(isValid, true)
+
+  const invalidSig = Buffer.from(sig)
+  invalidSig[0] ^= 0xff
+  const isInvalid = verify('ed25519', message, pair.publicKey, invalidSig)
+  assert.equal(isInvalid, false)
 })
 
 test('Sign and Verify class interface', () => {
   const pair = generateKeyPairSync('ed25519')
-  const message = 'Data stream'
+  const chunk1 = 'Data stream part 1'
+  const chunk2 = 'Data stream part 2'
 
   const signer = createSign('ed25519')
-  signer.update(message)
+  signer.update(chunk1).update(chunk2)
   const sig = signer.sign(pair.privateKey)
 
   const verifier = createVerify('ed25519')
-  verifier.update(message)
+  verifier.update(chunk1).update(chunk2)
   const isValid = verifier.verify(pair.publicKey, sig)
 
   assert.equal(isValid, true)

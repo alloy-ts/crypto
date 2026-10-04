@@ -5,6 +5,7 @@ import { TLS, CryptoProviderType } from '../index.js'
 test('TLS default and provider selection', () => {
   const tlsDefault = new TLS()
   assert.equal(tlsDefault.providerName, 'ring')
+  assert.equal(tlsDefault.isSupported(), true)
 
   const tlsOpenssl = new TLS(CryptoProviderType.OpenSSL)
   assert.equal(tlsOpenssl.providerName, 'openssl')
@@ -14,6 +15,4 @@ test('TLS default and provider selection', () => {
 
   const tlsMbed = new TLS(CryptoProviderType.MbedTLS)
   assert.equal(tlsMbed.providerName, 'mbedtls')
-
-  assert.equal(tlsDefault.isSupported(), true)
 })

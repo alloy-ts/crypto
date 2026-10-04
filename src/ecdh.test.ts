@@ -9,6 +9,9 @@ test('ECDH key exchange between two parties', () => {
   const alicePub = alice.getPublicKey()
   const bobPub = bob.getPublicKey()
 
+  assert.ok(alicePub.length > 0)
+  assert.ok(bobPub.length > 0)
+
   const aliceSecret = alice.computeSecret(bobPub)
   const bobSecret = bob.computeSecret(alicePub)
 
