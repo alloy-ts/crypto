@@ -54,7 +54,7 @@ const derivedAsync = await pbkdf2('password', 'salt', 10000, 32, 'sha512')
 ### Argon2
 
 ```ts
-import { argon2HashSync, argon2VerifySync, Algorithm, Version } from '@lib/crypto'
+import { argon2HashSync, argon2Verify, Algorithm, Version } from '@lib/crypto'
 
 const hashStr = argon2HashSync('my-password', {
   algorithm: Algorithm.Argon2id,
@@ -63,7 +63,7 @@ const hashStr = argon2HashSync('my-password', {
   memoryCost: 19456,
 })
 
-const isValid = argon2VerifySync(hashStr, 'my-password')
+const isValid = await argon2Verify(hashStr, 'my-password')
 ```
 
 ### TLS Engine

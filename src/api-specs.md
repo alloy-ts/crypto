@@ -18,7 +18,8 @@ This document tabulates the standard Node.js `node:crypto` API, our implementati
 | `crypto.createHmac(algorithm, key)` | `createHmac(...)` / `Hmac` class | **Compatible** | Powered by `ring::hmac` supporting `update` and `digest` with encoding options (`hex`, `base64`, `binary`). |
 | `crypto.pbkdf2(...)` | `pbkdf2(...)` | **Compatible** | Asynchronous PBKDF2 key derivation using NAPI async task & `ring::pbkdf2`. |
 | `crypto.pbkdf2Sync(...)` | `pbkdf2Sync(...)` | **Compatible** | Synchronous PBKDF2 key derivation using `ring::pbkdf2`. |
-| Argon2 Hashing & Verification | `argon2Hash`, `argon2HashSync`, `argon2Verify`, `argon2VerifySync`, `argon2ParseOptions` | **Extension / High-Perf** | Follows `@node-rs/argon2` specs using `argon2-rust` (PHC format, customizable memory/time cost/parallelism). |
+| Argon2 Key Derivation | `crypto.argon2(algorithm, parameters, callback)` / `crypto.argon2Sync(algorithm, parameters)` | **Compatible** | Standard Node.js `node:crypto` Argon2 API (v24.7.0+). |
+| Argon2 PHC Hashing & Verification | `argon2Hash`, `argon2HashSync`, `argon2Verify`, `argon2ParseOptions` | **Extension / High-Perf** | Follows `@node-rs/argon2` specs using `argon2-rust` (PHC format, customizable memory/time cost/parallelism). |
 | TLS Engine & Crypto Providers | `TLS` class / `CryptoProviderType` | **Extension / Native TLS** | Exposes `rustls` with configurable backends: `ring` (default), OpenSSL (`rustls-openssl`), BoringSSL (`boring-rustls-provider`), and MbedTLS (`rustls-mbedcrypto-provider`). |
 | `crypto.createCipheriv` / `createDecipheriv` | *Planned / Out of Scope* | Not Implemented | Symmetric ciphers AES-GCM / ChaCha20-Poly1305 can be added in future iterations. |
 | `crypto.generateKeyPair` / `Sign` / `Verify` | *Planned / Out of Scope* | Not Implemented | Asymmetric RSA/ECDSA signing & key generation. |
@@ -44,12 +45,13 @@ This document tabulates the standard Node.js `node:crypto` API, our implementati
 - `pbkdf2Sync(password, salt, iterations, keylen, digest): Buffer`
 
 ### 4. Argon2 (`src/argon2.rs`)
+- `crypto.argon2(algorithm, parameters, callback): Promise<Buffer>`
+- `crypto.argon2Sync(algorithm, parameters): Buffer`
 - `argon2Hash(password, options?, abortSignal?): Promise<string>`
 - `argon2HashSync(password, options?): string`
 - `argon2HashRaw(password, options?): Promise<Buffer>`
 - `argon2HashRawSync(password, options?): Buffer`
 - `argon2Verify(hashed, password, options?): Promise<boolean>`
-- `argon2VerifySync(hashed, password, options?): boolean`
 - `argon2ParseOptions(hashed): ParsedHashOptions`
 
 ### 5. TLS (`src/tls.rs`)
