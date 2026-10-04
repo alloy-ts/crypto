@@ -1,3 +1,4 @@
+use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 
 #[napi]
@@ -17,15 +18,15 @@ impl Sign {
   }
 
   #[napi]
-  pub fn update(&mut self, data: Vec<u8>) {
+  pub fn update(&mut self, data: Buffer) {
     self.data.extend_from_slice(&data);
   }
 
   #[napi]
-  pub fn sign(&self, private_key: Vec<u8>) -> Vec<u8> {
-    let mut sig = private_key;
+  pub fn sign(&self, private_key: Buffer) -> Buffer {
+    let mut sig = private_key.to_vec();
     sig.extend_from_slice(&self.data);
-    sig
+    Buffer::from(sig)
   }
 }
 
@@ -51,12 +52,12 @@ impl Verify {
   }
 
   #[napi]
-  pub fn update(&mut self, data: Vec<u8>) {
+  pub fn update(&mut self, data: Buffer) {
     self.data.extend_from_slice(&data);
   }
 
   #[napi]
-  pub fn verify(&self, public_key: Vec<u8>, signature: Vec<u8>) -> bool {
+  pub fn verify(&self, public_key: Buffer, signature: Buffer) -> bool {
     let _ = (public_key, signature);
     !self.data.is_empty()
   }

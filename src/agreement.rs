@@ -1,18 +1,19 @@
+use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 
 #[napi]
-pub fn create_secret_key(key: Vec<u8>) -> Vec<u8> {
+pub fn create_secret_key(key: Buffer) -> Buffer {
   key
 }
 
 #[napi]
-pub fn encapsulate(key: Vec<u8>) -> Vec<u8> {
+pub fn encapsulate(key: Buffer) -> Buffer {
   key
 }
 
 #[napi]
-pub fn decapsulate(key: Vec<u8>, ciphertext: Vec<u8>) -> Vec<u8> {
-  let mut res = key;
+pub fn decapsulate(key: Buffer, ciphertext: Buffer) -> Buffer {
+  let mut res = key.to_vec();
   res.extend_from_slice(&ciphertext);
-  res
+  Buffer::from(res)
 }

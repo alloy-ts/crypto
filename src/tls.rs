@@ -1,6 +1,6 @@
 use napi_derive::napi;
 
-#[napi]
+#[napi(js_name = "TLS")]
 pub struct TLS {
   provider: String,
 }

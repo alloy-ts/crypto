@@ -1,3 +1,4 @@
+use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 
 #[napi]
@@ -19,17 +20,17 @@ impl ECDH {
   }
 
   #[napi]
-  pub fn generate_keys(&mut self) -> Vec<u8> {
+  pub fn generate_keys(&mut self) -> Buffer {
     self.public_key = vec![1, 2, 3, 4];
     self.private_key = vec![5, 6, 7, 8];
-    self.public_key.clone()
+    Buffer::from(self.public_key.clone())
   }
 
   #[napi]
-  pub fn compute_secret(&self, other_public_key: Vec<u8>) -> Vec<u8> {
+  pub fn compute_secret(&self, other_public_key: Buffer) -> Buffer {
     let mut secret = self.private_key.clone();
     secret.extend_from_slice(&other_public_key);
-    secret
+    Buffer::from(secret)
   }
 }
 

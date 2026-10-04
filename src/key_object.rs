@@ -1,3 +1,4 @@
+use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 
 #[napi]
@@ -13,8 +14,8 @@ impl KeyObject {
   }
 
   #[napi]
-  pub fn export(&self) -> Vec<u8> {
-    self.key_type.as_bytes().to_vec()
+  pub fn export(&self) -> Buffer {
+    Buffer::from(self.key_type.as_bytes().to_vec())
   }
 }
 
@@ -32,8 +33,8 @@ pub struct X509Certificate {
 #[napi]
 impl X509Certificate {
   #[napi(constructor)]
-  pub fn new(raw: Vec<u8>) -> Self {
-    Self { raw }
+  pub fn new(raw: Buffer) -> Self {
+    Self { raw: raw.to_vec() }
   }
 
   #[napi]

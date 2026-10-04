@@ -1,3 +1,4 @@
+use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 
 #[napi]
@@ -28,7 +29,7 @@ impl Hash {
   }
 
   #[napi]
-  pub fn update(&mut self, data: Vec<u8>) {
+  pub fn update(&mut self, data: Buffer) {
     self.data.extend_from_slice(&data);
   }
 

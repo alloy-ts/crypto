@@ -1,3 +1,4 @@
+use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 
 #[napi]
@@ -13,18 +14,18 @@ impl Cipher {
   }
 
   #[napi]
-  pub fn update(&self, data: Vec<u8>) -> Vec<u8> {
+  pub fn update(&self, data: Buffer) -> Buffer {
     data
   }
 
   #[napi]
-  pub fn final_cipher(&self) -> Vec<u8> {
-    Vec::new()
+  pub fn final_cipher(&self) -> Buffer {
+    Buffer::from(vec![])
   }
 }
 
 #[napi]
-pub fn create_cipheriv(algorithm: String, key: Vec<u8>, iv: Vec<u8>) -> Cipher {
+pub fn create_cipheriv(algorithm: String, key: Buffer, iv: Buffer) -> Cipher {
   let _ = (key, iv);
   Cipher::new(algorithm)
 }
