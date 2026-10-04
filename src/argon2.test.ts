@@ -1,24 +1,30 @@
 import assert from "node:assert/strict";
 import test, { describe } from "node:test";
-import {
-  argon2,
-  argon2Sync,
-  argon2Hash,
-  argon2HashSync,
-  argon2Verify,
-  argon2VerifySync,
-  argon2ParseOptions,
-  Algorithm,
-  Version,
-} from "../index.js";
-
-const crypto = { argon2, argon2Sync };
+import crypto from "../index.js";
 
 const message = Buffer.alloc(32, 0x01);
 const nonce = Buffer.alloc(16, 0x02);
 const secret = Buffer.alloc(8, 0x03);
 const associatedData = Buffer.alloc(12, 0x04);
 const defaults = { message, nonce, parallelism: 1, tagLength: 64, memory: 8, passes: 3 };
+
+function argon2Async(algorithm: string, parameters: Record<string, unknown>): Promise<Buffer> {
+  const { promise, resolve, reject } = Promise.withResolvers<Buffer>();
+  (crypto as any).argon2(algorithm, parameters, (err: Error | null, result?: Buffer) => (err ? reject(err) : resolve(result!)));
+  return promise;
+}
+
+function expectNodeError(fn: () => unknown, ctor: ErrorConstructor, code: string, message: string) {
+  let error: any;
+  try {
+    fn();
+  } catch (e) {
+    error = e;
+  }
+  assert.ok(error instanceof ctor);
+  assert.equal(error.code, code);
+  assert.equal(error.message, message);
+}
 
 const vectors: [algorithm: string, overrides: Record<string, unknown>, expectedHex: string][] = [
   [
@@ -82,8 +88,10 @@ const vectors: [algorithm: string, overrides: Record<string, unknown>, expectedH
 
 describe("crypto.argon2", () => {
   test("exports match node's shape", () => {
-    assert.equal(typeof crypto.argon2, "function");
-    assert.equal(typeof crypto.argon2Sync, "function");
+    assert.equal(typeof (crypto as any).argon2, "function");
+    assert.equal(typeof (crypto as any).argon2Sync, "function");
+    assert.equal((crypto as any).argon2.length, 3);
+    assert.equal((crypto as any).argon2Sync.length, 2);
   });
 
   describe("derives node's expected output", () => {
@@ -92,12 +100,12 @@ describe("crypto.argon2", () => {
       test(label, async () => {
         const parameters = { ...defaults, ...overrides };
 
-        const syncResult = crypto.argon2Sync(algorithm, parameters as any);
+        const syncResult = (crypto as any).argon2Sync(algorithm, parameters);
         assert.ok(Buffer.isBuffer(syncResult));
         assert.equal(syncResult.toString("hex"), expected);
         assert.equal(syncResult.length, (parameters.tagLength as number) ?? 64);
 
-        const asyncResult = await argon2(algorithm, parameters as any);
+        const asyncResult = await argon2Async(algorithm, parameters);
         assert.ok(Buffer.isBuffer(asyncResult));
         assert.equal(asyncResult.toString("hex"), expected);
       });
@@ -105,60 +113,217 @@ describe("crypto.argon2", () => {
   });
 
   test("omitted secret/associatedData equals explicit empty", () => {
-    const omitted = crypto.argon2Sync("argon2id", defaults as any);
-    const explicitEmpty = crypto.argon2Sync("argon2id", {
+    const omitted = (crypto as any).argon2Sync("argon2id", defaults);
+    const explicitEmpty = (crypto as any).argon2Sync("argon2id", {
       ...defaults,
       secret: Buffer.alloc(0),
       associatedData: Buffer.alloc(0),
-    } as any);
+    });
     assert.deepStrictEqual(omitted, explicitEmpty);
   });
 
   test("accepts ArrayBuffer and offset TypedArray views for message", () => {
-    const base = crypto.argon2Sync("argon2id", { ...defaults, tagLength: 32 } as any);
+    const base = (crypto as any).argon2Sync("argon2id", { ...defaults, tagLength: 32 });
 
     const asArrayBuffer = message.buffer.slice(message.byteOffset, message.byteOffset + message.byteLength);
-    assert.deepStrictEqual(crypto.argon2Sync("argon2id", { ...defaults, tagLength: 32, message: new Uint8Array(asArrayBuffer) } as any), base);
+    assert.deepStrictEqual((crypto as any).argon2Sync("argon2id", { ...defaults, tagLength: 32, message: asArrayBuffer }), base);
 
     const padded = Buffer.concat([Buffer.alloc(5, 0xee), message]);
-    assert.deepStrictEqual(crypto.argon2Sync("argon2id", { ...defaults, tagLength: 32, message: padded.subarray(5) } as any), base);
+    assert.deepStrictEqual((crypto as any).argon2Sync("argon2id", { ...defaults, tagLength: 32, message: padded.subarray(5) }), base);
+  });
+
+  test("async callback gets (null, Buffer) and inputs are copied at call time", async () => {
+    const parameters = { ...defaults, tagLength: 32 };
+    const expected = (crypto as any).argon2Sync("argon2id", parameters);
+
+    const mutableMessage = Buffer.from(message);
+    const mutableNonce = Buffer.from(nonce);
+    const { promise, resolve, reject } = Promise.withResolvers<{ err: unknown; result: Buffer }>();
+    (crypto as any).argon2("argon2id", { ...parameters, message: mutableMessage, nonce: mutableNonce }, (err: any, result: Buffer) => {
+      if (err) return reject(err);
+      resolve({ err, result: result! });
+    });
+    mutableMessage.fill(0xff);
+    mutableNonce.fill(0xff);
+
+    const { err, result } = await promise;
+    assert.equal(err, null);
+    assert.deepStrictEqual(result, expected);
   });
 
   test("concurrent async jobs all complete", async () => {
     const parameters = { ...defaults, parallelism: 4, tagLength: 32, memory: 32 };
     const algorithms = ["argon2d", "argon2i", "argon2id"];
-    const results = await Promise.all(algorithms.map(algorithm => argon2(algorithm, parameters as any)));
-    assert.deepStrictEqual(results, algorithms.map(algorithm => crypto.argon2Sync(algorithm, parameters as any)));
+    const results = await Promise.all(algorithms.map(algorithm => argon2Async(algorithm, parameters)));
+    assert.deepStrictEqual(results, algorithms.map(algorithm => (crypto as any).argon2Sync(algorithm, parameters)));
   });
 
-  test("argon2HashSync and argon2VerifySync PHC string hashing", () => {
-    const password = "my-secret-password";
-    const hash = argon2HashSync(password, {
-      algorithm: Algorithm.Argon2id,
-      version: Version.V0x13,
-    });
-    assert.ok(hash.startsWith("$argon2id$v=19$"));
+  describe("rejects out-of-range parameters like node", () => {
+    const cases: [overrides: Record<string, unknown>, message: string][] = [
+      [
+        { nonce: nonce.subarray(0, 7) },
+        'The value of "parameters.nonce.byteLength" is out of range. It must be >= 8 && <= 4294967295. Received 7',
+      ],
+      [
+        { tagLength: 3 },
+        'The value of "parameters.tagLength" is out of range. It must be >= 4 && <= 4294967295. Received 3',
+      ],
+      [
+        { tagLength: 2 ** 32 },
+        'The value of "parameters.tagLength" is out of range. It must be >= 4 && <= 4294967295. Received 4294967296',
+      ],
+      [{ passes: 0 }, 'The value of "parameters.passes" is out of range. It must be >= 1 && <= 4294967295. Received 0'],
+      [
+        { passes: 2 ** 32 },
+        'The value of "parameters.passes" is out of range. It must be >= 1 && <= 4294967295. Received 4294967296',
+      ],
+      [
+        { parallelism: 0 },
+        'The value of "parameters.parallelism" is out of range. It must be >= 1 && <= 16777215. Received 0',
+      ],
+      [
+        { parallelism: 2 ** 24 },
+        'The value of "parameters.parallelism" is out of range. It must be >= 1 && <= 16777215. Received 16777216',
+      ],
+      [
+        { parallelism: 4, memory: 16 },
+        'The value of "parameters.memory" is out of range. It must be >= 32 && <= 4294967295. Received 16',
+      ],
+      [
+        { memory: 2 ** 32 },
+        'The value of "parameters.memory" is out of range. It must be >= 8 && <= 4294967295. Received 4294967296',
+      ],
+    ];
 
-    const isValid = argon2VerifySync(hash, password);
-    assert.equal(isValid, true);
-
-    const isInvalid = argon2VerifySync(hash, "wrong-password");
-    assert.equal(isInvalid, false);
-
-    const parsed = argon2ParseOptions(hash);
-    assert.equal(parsed.algorithm, Algorithm.Argon2id);
-    assert.equal(parsed.version, Version.V0x13);
+    for (const [overrides, errorMessage] of cases) {
+      test(JSON.stringify(overrides), () => {
+        const parameters = { ...defaults, ...overrides };
+        expectNodeError(
+          () => (crypto as any).argon2("argon2id", parameters, () => {}),
+          RangeError,
+          "ERR_OUT_OF_RANGE",
+          errorMessage,
+        );
+        expectNodeError(() => (crypto as any).argon2Sync("argon2id", parameters), RangeError, "ERR_OUT_OF_RANGE", errorMessage);
+      });
+    }
   });
 
-  test("argon2Hash and argon2Verify async PHC string hashing", async () => {
-    const password = "async-password";
-    const hash = await argon2Hash(password, {
-      memoryCost: 4096,
-      timeCost: 1,
-    });
-    assert.ok(hash.includes("$argon2id$"));
+  describe("rejects missing parameters like node", () => {
+    const bufferTypesMessage =
+      "must be of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView. Received undefined";
+    const cases: Record<string, string> = {
+      message: `The "parameters.message" property ${bufferTypesMessage}`,
+      nonce: `The "parameters.nonce" property ${bufferTypesMessage}`,
+      parallelism: 'The "parameters.parallelism" property must be of type number. Received undefined',
+      tagLength: 'The "parameters.tagLength" property must be of type number. Received undefined',
+      memory: 'The "parameters.memory" property must be of type number. Received undefined',
+      passes: 'The "parameters.passes" property must be of type number. Received undefined',
+    };
 
-    const isValid = await argon2Verify(hash, password);
-    assert.equal(isValid, true);
+    for (const [key, errorMessage] of Object.entries(cases)) {
+      test(key, () => {
+        const parameters: Record<string, unknown> = { ...defaults };
+        delete parameters[key];
+        expectNodeError(
+          () => (crypto as any).argon2("argon2id", parameters, () => {}),
+          TypeError,
+          "ERR_INVALID_ARG_TYPE",
+          errorMessage,
+        );
+        expectNodeError(
+          () => (crypto as any).argon2Sync("argon2id", parameters),
+          TypeError,
+          "ERR_INVALID_ARG_TYPE",
+          errorMessage,
+        );
+      });
+    }
+  });
+
+  test("rejects invalid algorithm, parameters, and callback like node", () => {
+    expectNodeError(
+      () => (crypto as any).argon2Sync("argon2x", defaults),
+      TypeError,
+      "ERR_INVALID_ARG_VALUE",
+      "The argument 'algorithm' must be one of: 'argon2d', 'argon2i', 'argon2id'. Received 'argon2x'",
+    );
+    expectNodeError(
+      () => (crypto as any).argon2Sync(5 as any, defaults),
+      TypeError,
+      "ERR_INVALID_ARG_TYPE",
+      'The "algorithm" argument must be of type string. Received type number (5)',
+    );
+    expectNodeError(
+      () => (crypto as any).argon2(),
+      TypeError,
+      "ERR_INVALID_ARG_TYPE",
+      'The "algorithm" argument must be of type string. Received undefined',
+    );
+    expectNodeError(
+      () => (crypto as any).argon2Sync("argon2id", null as any),
+      TypeError,
+      "ERR_INVALID_ARG_TYPE",
+      'The "parameters" argument must be of type object. Received null',
+    );
+    expectNodeError(
+      () => (crypto as any).argon2("argon2id", null, null),
+      TypeError,
+      "ERR_INVALID_ARG_TYPE",
+      'The "parameters" argument must be of type object. Received null',
+    );
+    expectNodeError(
+      () => (crypto as any).argon2("argon2id", defaults, null),
+      TypeError,
+      "ERR_INVALID_ARG_TYPE",
+      'The "callback" argument must be of type function. Received null',
+    );
+    expectNodeError(
+      () => (crypto as any).argon2("argon2id", defaults, {}),
+      TypeError,
+      "ERR_INVALID_ARG_TYPE",
+      'The "callback" argument must be of type function. Received an instance of Object',
+    );
+  });
+
+  test("rejects wrong-typed secret/associatedData", () => {
+    const expected = (name: string) =>
+      `The "${name}" property must be of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView. Received type number (42)`;
+    expectNodeError(
+      () => (crypto as any).argon2Sync("argon2id", { ...defaults, secret: 42 }),
+      TypeError,
+      "ERR_INVALID_ARG_TYPE",
+      expected("parameters.secret"),
+    );
+    expectNodeError(
+      () => (crypto as any).argon2Sync("argon2id", { ...defaults, associatedData: 42 }),
+      TypeError,
+      "ERR_INVALID_ARG_TYPE",
+      expected("parameters.associatedData"),
+    );
+  });
+
+  test("accepts SharedArrayBuffer inputs, like node", () => {
+    const expected = "03aab965c12001c9d7d0d2de33192c0494b684bb148196d73c1df1acaf6d0c2e";
+    const sabMessage = new SharedArrayBuffer(32);
+    new Uint8Array(sabMessage).fill(0x01);
+    const sabNonce = new SharedArrayBuffer(16);
+    new Uint8Array(sabNonce).fill(0x02);
+
+    const parameters = { parallelism: 4, tagLength: 32, memory: 32, passes: 3 };
+    assert.equal(
+      (crypto as any).argon2Sync("argon2id", { ...parameters, message: sabMessage, nonce: sabNonce }).toString("hex"),
+      expected,
+    );
+    assert.equal(
+      (crypto as any)
+        .argon2Sync("argon2id", {
+          ...parameters,
+          message: new Uint8Array(sabMessage),
+          nonce: new Uint8Array(sabNonce),
+        })
+        .toString("hex"),
+      expected,
+    );
   });
 });

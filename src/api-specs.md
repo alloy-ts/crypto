@@ -7,7 +7,7 @@ This document tabulates the standard Node.js `node:crypto` API, our implementati
 To systematically measure the compatibility rate against the official `node:crypto` API specification:
 
 1. **API Surface Area Enumeration**:
-   The `node:crypto` surface area consists of standard top-level functions, classes, methods, and constants (e.g. `createHash`, `createHmac`, `pbkdf2`, `argon2`, `randomBytes`, `generateKeyPair`, `publicEncrypt`, `privateDecrypt`, `ECDH`, `KeyObject`, `X509Certificate`, etc.).
+   The `node:crypto` surface area consists of standard top-level functions, classes, methods, and constants (e.g. `crypto.argon2`, `crypto.argon2Sync`, `createHash`, `createHmac`, `pbkdf2`, `randomBytes`, `generateKeyPair`, `publicEncrypt`, `privateDecrypt`, `ECDH`, `KeyObject`, `X509Certificate`, etc.).
 
 2. **Test-Driven Verification Matrix**:
    Compatibility is verified by running upstream test suites and RFC vector test suites (such as RFC 9106 test vectors for Argon2 and standard PKCS#1 / RSA test vectors). Every module has a matching unit test file (`src/*.test.ts`) that imports the binding directly and asserts equivalent output against Node.js runtime expected values.
@@ -30,7 +30,7 @@ Currently, **11 out of 11** core implemented modules (`crypto_hasher`, `hmac`, `
 | `crypto.createMac(algorithm, key)` | `createMac(...)` | **Compatible** | MAC abstraction utility using native implementations. |
 | `crypto.pbkdf2(...)` | `pbkdf2(...)` | **Compatible** | Asynchronous PBKDF2 key derivation using NAPI async task & `ring::pbkdf2`. |
 | `crypto.pbkdf2Sync(...)` | `pbkdf2Sync(...)` | **Compatible** | Synchronous PBKDF2 key derivation using `ring::pbkdf2`. |
-| `crypto.argon2(...)` / `crypto.argon2Sync(...)` | `argon2(...)`, `argon2Sync(...)`, `argon2Hash`, `argon2HashSync`, `argon2Verify`, `argon2VerifySync`, `argon2ParseOptions` | **Compatible & High-Perf** | Follows RFC 9106 & Node.js `crypto.argon2`/`crypto.argon2Sync` call signatures using `argon2-rust`. |
+| `crypto.argon2(algorithm, parameters, callback)` / `crypto.argon2Sync(algorithm, parameters)` | `argon2(algorithm, parameters, callback)`, `argon2Sync(algorithm, parameters)` | **Compatible** | Standard Node.js `node:crypto` Argon2 API (added in Node v24.7.0) powered by `argon2-rust`. Accepts `message`, `nonce`, `parallelism`, `tagLength`, `memory`, `passes`, `secret`, `associatedData`. |
 | `crypto.generateKeyPair` / `generateKeyPairSync` | `generateKeyPair`, `generateKeyPairSync` | **Compatible** | Asymmetric key generation for RSA, Ed25519, P-256 using `rsa` & `ring`. |
 | `crypto.publicEncrypt` / `privateDecrypt` | `publicEncrypt`, `privateDecrypt` | **Compatible** | RSA public encryption / private decryption with PKCS#1 and OAEP paddings. |
 | `crypto.privateEncrypt` / `publicDecrypt` | `privateEncrypt`, `publicDecrypt` | **Compatible** | RSA private encryption / public decryption. |
