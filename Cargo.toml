@@ -19,6 +19,7 @@ rsa = "0.9.10"
 rustls = { version = "0.23.45", features = ["ring"] }
 rustls-mbedcrypto-provider = "0.1.1"
 rustls-openssl = "0.4.2"
+sha1 = "0.10.6"
 sha2 = "0.10.8"
 simdutf8 = "0.1.5"
 x509-parser = "0.18.1"
