@@ -107,8 +107,5 @@ Below is the complete comparison against Node.js `node:crypto` exports:
 
 | API | Type | Notes |
 | :--- | :--- | :--- |
-| `argon2Hash` / `argon2HashSync` | High-Perf Argon2 | PHC string password hashing |
-| `argon2Verify` / `argon2VerifySync` | High-Perf Argon2 | PHC string password verification |
-| `argon2ParseOptions` | Utility | PHC string parameter parsing |
 | `encryptAead` / `decryptAead` | Native AEAD | High-performance AES-GCM AEAD encryption and decryption with AAD |
 | `TLS` / `CryptoProviderType` | Native TLS Engine | Native Rustls provider selection (`Ring`, `OpenSSL`, `BoringSSL`, `MbedTLS`) |

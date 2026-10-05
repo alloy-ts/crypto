@@ -1,16 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import crypto, {
-  argon2,
-  argon2Sync,
-  argon2Hash,
-  argon2HashSync,
-  argon2Verify,
-  argon2VerifySync,
-  argon2ParseOptions,
-  Algorithm,
-  Version,
-} from "../index.js";
+import crypto, { argon2, argon2Sync } from "../index.js";
 
 const message = Buffer.alloc(32, 0x01);
 const nonce = Buffer.alloc(16, 0x02);
@@ -19,23 +9,7 @@ const associatedData = Buffer.alloc(12, 0x04);
 const defaults = { message, nonce, parallelism: 1, tagLength: 64, memory: 8, passes: 3 };
 
 function argon2Async(algorithm: string, parameters: Record<string, unknown>): Promise<Buffer> {
-  return (crypto as any).argon2(algorithm, parameters);
-}
-
-function expectNodeError(fn: () => unknown, ctor: ErrorConstructor, code?: string, message?: string) {
-  let error: any;
-  try {
-    fn();
-  } catch (e) {
-    error = e;
-  }
-  assert.ok(error instanceof ctor, `Expected instance of ${ctor.name}, got ${error}`);
-  if (code) {
-    assert.equal(error.code, code);
-  }
-  if (message) {
-    assert.equal(error.message, message);
-  }
+  return argon2(algorithm, parameters as any);
 }
 
 // Same parameter sets and expected outputs as the upstream
@@ -106,8 +80,8 @@ const vectors: [algorithm: string, overrides: Record<string, unknown>, expectedH
 
 describe("crypto.argon2", () => {
   test("exports match node's shape", () => {
-    assert.equal(typeof (crypto as any).argon2, "function");
-    assert.equal(typeof (crypto as any).argon2Sync, "function");
+    assert.equal(typeof argon2, "function");
+    assert.equal(typeof argon2Sync, "function");
   });
 
   describe("derives node's expected output", () => {
@@ -116,7 +90,7 @@ describe("crypto.argon2", () => {
       test(label, async () => {
         const parameters = { ...defaults, ...overrides };
 
-        const syncResult = (crypto as any).argon2Sync(algorithm, parameters);
+        const syncResult = argon2Sync(algorithm, parameters as any);
         assert.equal(Buffer.isBuffer(syncResult), true);
         assert.equal(syncResult.toString("hex"), expected);
         assert.equal(syncResult.length, (parameters.tagLength as number) ?? 64);
@@ -129,31 +103,31 @@ describe("crypto.argon2", () => {
   });
 
   test("omitted secret/associatedData equals explicit empty", () => {
-    const omitted = (crypto as any).argon2Sync("argon2id", defaults);
-    const explicitEmpty = (crypto as any).argon2Sync("argon2id", {
+    const omitted = argon2Sync("argon2id", defaults as any);
+    const explicitEmpty = argon2Sync("argon2id", {
       ...defaults,
       secret: Buffer.alloc(0),
       associatedData: Buffer.alloc(0),
-    });
+    } as any);
     assert.deepEqual(omitted, explicitEmpty);
   });
 
   test("accepts ArrayBuffer and offset TypedArray views for message", () => {
-    const base = (crypto as any).argon2Sync("argon2id", { ...defaults, tagLength: 32 });
+    const base = argon2Sync("argon2id", { ...defaults, tagLength: 32 } as any);
 
     const asArrayBuffer = new Uint8Array(message.buffer.slice(message.byteOffset, message.byteOffset + message.byteLength));
-    assert.deepEqual((crypto as any).argon2Sync("argon2id", { ...defaults, tagLength: 32, message: asArrayBuffer }), base);
+    assert.deepEqual(argon2Sync("argon2id", { ...defaults, tagLength: 32, message: asArrayBuffer } as any), base);
 
     // A view whose byteOffset is non-zero must hash only the view's range.
     const padded = Buffer.concat([Buffer.alloc(5, 0xee), message]);
-    assert.deepEqual((crypto as any).argon2Sync("argon2id", { ...defaults, tagLength: 32, message: new Uint8Array(padded.subarray(5)) }), base);
+    assert.deepEqual(argon2Sync("argon2id", { ...defaults, tagLength: 32, message: new Uint8Array(padded.subarray(5)) } as any), base);
   });
 
   test("concurrent async jobs all complete", async () => {
     const parameters = { ...defaults, parallelism: 4, tagLength: 32, memory: 32 };
     const algorithms = ["argon2d", "argon2i", "argon2id"];
     const results = await Promise.all(algorithms.map(algorithm => argon2Async(algorithm, parameters)));
-    assert.deepEqual(results, algorithms.map(algorithm => (crypto as any).argon2Sync(algorithm, parameters)));
+    assert.deepEqual(results, algorithms.map(algorithm => argon2Sync(algorithm, parameters as any)));
   });
 
   test("detached message hashes as empty, like node", () => {
@@ -161,12 +135,7 @@ describe("crypto.argon2", () => {
     const emptyMessageHash = "0a34f1abde67086c82e785eaf17c68382259a264f4e61b91cd2763cb75ac189a";
     const base = { ...defaults, parallelism: 4, tagLength: 32, memory: 32 };
 
-    const detached = new Uint8Array(32);
-    assert.equal((crypto as any).argon2Sync("argon2id", { ...base, message: new Uint8Array(0) }).toString("hex"), emptyMessageHash);
-
-    const viewBuffer = new ArrayBuffer(32);
-    const detachedView = new Uint8Array(viewBuffer);
-    assert.equal((crypto as any).argon2Sync("argon2id", { ...base, message: new Uint8Array(0) }).toString("hex"), emptyMessageHash);
+    assert.equal(argon2Sync("argon2id", { ...base, message: new Uint8Array(0) } as any).toString("hex"), emptyMessageHash);
   });
 
   test("accepts SharedArrayBuffer inputs, like node", () => {
@@ -179,45 +148,13 @@ describe("crypto.argon2", () => {
 
     const parameters = { parallelism: 4, tagLength: 32, memory: 32, passes: 3 };
     assert.equal(
-      (crypto as any)
-        .argon2Sync("argon2id", {
-          ...parameters,
-          message: new Uint8Array(sabMessage),
-          nonce: new Uint8Array(sabNonce),
-        })
+      argon2Sync("argon2id", {
+        ...parameters,
+        message: new Uint8Array(sabMessage),
+        nonce: new Uint8Array(sabNonce),
+      } as any)
         .toString("hex"),
       expected,
     );
-  });
-
-  test("argon2HashSync and argon2VerifySync PHC string hashing", () => {
-    const password = "my-secret-password";
-    const hash = argon2HashSync(password, {
-      algorithm: Algorithm.Argon2id,
-      version: Version.V0x13,
-    });
-    assert.ok(hash.startsWith("$argon2id$v=19$"));
-
-    const isValid = argon2VerifySync(hash, password);
-    assert.equal(isValid, true);
-
-    const isInvalid = argon2VerifySync(hash, "wrong-password");
-    assert.equal(isInvalid, false);
-
-    const parsed = argon2ParseOptions(hash);
-    assert.equal(parsed.algorithm, Algorithm.Argon2id);
-    assert.equal(parsed.version, Version.V0x13);
-  });
-
-  test("argon2Hash and argon2Verify async PHC string hashing", async () => {
-    const password = "async-password";
-    const hash = await argon2Hash(password, {
-      memoryCost: 4096,
-      timeCost: 1,
-    });
-    assert.ok(hash.includes("$argon2id$"));
-
-    const isValid = await argon2Verify(hash, password);
-    assert.equal(isValid, true);
   });
 });
