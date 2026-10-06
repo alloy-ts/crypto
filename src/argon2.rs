@@ -1,6 +1,6 @@
 use argon2_rust::{
   params::{Memory, TagLen},
-  Algorithm as Argon2Algorithm, Argon2, Params, Version as Argon2Version,
+  Algorithm as Argon2Algorithm, Argon2, Error as Argon2Error, Params, Version as Argon2Version,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
