@@ -1,5 +1,5 @@
 [package]
-name = "lib-crypto-native"
+name = "lib_crypto_native"
 version = "0.1.0"
 edition = "2024"
 
@@ -15,10 +15,11 @@ napi = "3"
 napi-derive = "3"
 rand = "0.10.3"
 ring = "0.17.14"
-rsa = "0.9.10"
+rsa = { version = "0.9.10", features = ["sha2"] }
 rustls = { version = "0.23.45", features = ["ring"] }
 rustls-mbedcrypto-provider = "0.1.1"
 rustls-openssl = "0.4.2"
+sha1 = "0.10.6"
 sha2 = "0.10.8"
 simdutf8 = "0.1.5"
 x509-parser = "0.18.1"
