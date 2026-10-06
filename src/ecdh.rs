@@ -77,3 +77,15 @@ pub fn create_diffie_hellman(group_or_prime: Either<String, u32>) -> Result<ECDH
 pub fn create_diffie_hellman_group(name: String) -> Result<ECDH> {
   ECDH::new(name)
 }
+
+#[napi(js_name = "getCurves")]
+pub fn get_curves() -> Vec<String> {
+  vec![
+    "p256".to_string(),
+    "p384".to_string(),
+    "prime256v1".to_string(),
+    "secp256r1".to_string(),
+    "secp384r1".to_string(),
+    "x25519".to_string(),
+  ]
+}
