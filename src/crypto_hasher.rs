@@ -74,6 +74,20 @@ impl Hash {
   }
 
   #[napi]
+  pub fn copy(&self) -> Result<Self> {
+    let hasher = self
+      .hasher
+      .as_ref()
+      .ok_or_else(|| Error::new(Status::GenericFailure, "Digest already called"))?;
+    let new_hasher = match hasher {
+      HasherImpl::Ring(ctx) => HasherImpl::Ring(ctx.clone()),
+    };
+    Ok(Self {
+      hasher: Some(new_hasher),
+    })
+  }
+
+  #[napi]
   pub fn digest(&mut self, output_encoding: Option<String>) -> Result<Either<String, Buffer>> {
     let hasher = self
       .hasher

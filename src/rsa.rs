@@ -15,6 +15,7 @@ pub struct KeyPairResult {
 
 #[napi(object, object_to_js = false)]
 #[derive(Default)]
+#[allow(dead_code)]
 pub struct KeyOptions {
   pub key: Option<Either<String, Uint8Array>>,
   pub passphrase: Option<Either<String, Uint8Array>>,
