@@ -4,7 +4,7 @@ use rsa::pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey};
 use rsa::pkcs8::{DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey};
 use rsa::rand_core::OsRng;
 use rsa::sha2::digest::{Digest, DynDigest, FixedOutputReset};
-use rsa::traits::{PaddingScheme, PublicKeyParts};
+use rsa::traits::PublicKeyParts;
 use rsa::{Oaep, Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
 
 #[napi(object)]
@@ -192,17 +192,26 @@ fn rsa_no_padding_encrypt(pub_key: &RsaPublicKey, buffer: &[u8]) -> Result<Vec<u
   }
   let mut padded = vec![0u8; key_size];
   padded[key_size - buffer.len()..].copy_from_slice(buffer);
-  let mut rng = OsRng;
-  pub_key
-    .encrypt(&mut rng, PaddingScheme::NoPadding, &padded)
-    .map_err(|e| Error::new(Status::GenericFailure, format!("RSA encryption failed: {e}")))
+  use rsa::traits::PublicKeyParts;
+  let n = pub_key.n();
+  let e = pub_key.e();
+  let m = rsa::BigUint::from_bytes_be(&padded);
+  let c = m.modpow(e, n);
+  let mut encrypted = c.to_bytes_be();
+  if encrypted.len() < key_size {
+    let mut p = vec![0u8; key_size - encrypted.len()];
+    p.extend_from_slice(&encrypted);
+    encrypted = p;
+  }
+  Ok(encrypted)
 }
 
 fn rsa_no_padding_decrypt(priv_key: &RsaPrivateKey, buffer: &[u8]) -> Result<Vec<u8>> {
-  let mut decrypted = priv_key
-    .decrypt(PaddingScheme::NoPadding, buffer)
-    .map_err(|e| Error::new(Status::GenericFailure, format!("RSA decryption failed: {e}")))?;
   let key_size = priv_key.size();
+  use rsa::traits::PrivateKeyParts;
+  let c = rsa::BigUint::from_bytes_be(buffer);
+  let m = c.modpow(priv_key.d(), priv_key.n());
+  let mut decrypted = m.to_bytes_be();
   if decrypted.len() < key_size {
     let mut padded = vec![0u8; key_size - decrypted.len()];
     padded.extend_from_slice(&decrypted);

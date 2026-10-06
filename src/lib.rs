@@ -10,8 +10,8 @@ pub(crate) mod signature;
 #[path = "key_object.rs"]
 pub(crate) mod key_object;
 
-#[path = "rand.rs"]
-pub(crate) mod rand;
+#[path = "random.rs"]
+pub(crate) mod random;
 
 #[path = "aead.rs"]
 pub(crate) mod aead;

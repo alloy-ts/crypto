@@ -15,7 +15,8 @@ napi = "3"
 napi-derive = "3"
 rand = "0.10.3"
 ring = "0.17.14"
-rsa = "0.9.10"
+rsa = { version = "0.9.10", features = ["sha2"] }
+sha1 = "0.10.6"
 rustls = { version = "0.23.45", features = ["ring"] }
 rustls-mbedcrypto-provider = "0.1.1"
 rustls-openssl = "0.4.2"
