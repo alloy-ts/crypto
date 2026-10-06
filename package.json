@@ -13,6 +13,7 @@
   "scripts": {
     "build": "node build.mjs --platform",
     "build:release": "node build.mjs --platform --release",
+    "build:wasm": "node build.mjs --target wasm32-wasip1-threads --no-default-features",
     "dev": "vp pack --watch",
     "start": "vp run src/main.ts",
     "test": "node --test test.cjs src/*.test.ts",
