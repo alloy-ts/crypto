@@ -1,4 +1,5 @@
 import { createBuildCommand, NapiCli } from '@napi-rs/cli'
+import fs from 'node:fs'
 
 const build = createBuildCommand(process.argv.slice(2))
 const options = build.getOptions()
@@ -11,3 +12,4 @@ const { task } = await cli.build({
 })
 
 await task
+fs.cpSync('build', '.', { recursive: true })
