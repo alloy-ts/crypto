@@ -26,13 +26,13 @@ fn thread_budget(lanes: u32) -> u32 {
   lanes.min(available)
 }
 
-fn map_error(err: Argon2Error) -> Error {
+fn map_error(err: argon2_rust::Error) -> Error {
   let status = match err {
-    Argon2Error::DecodingFail | Argon2Error::EncodingFail => Status::InvalidArg,
-    Argon2Error::MemoryAllocationError
-    | Argon2Error::ThreadFail
-    | Argon2Error::OsRandom
-    | Argon2Error::VerifyMismatch => Status::GenericFailure,
+    argon2_rust::Error::DecodingFail | argon2_rust::Error::EncodingFail => Status::InvalidArg,
+    argon2_rust::Error::MemoryAllocationError
+    | argon2_rust::Error::ThreadFail
+    | argon2_rust::Error::OsRandom
+    | argon2_rust::Error::VerifyMismatch => Status::GenericFailure,
     _ => Status::InvalidArg,
   };
   Error::new(status, err.to_string())

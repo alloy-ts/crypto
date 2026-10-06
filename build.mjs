@@ -6,7 +6,7 @@ const cli = new NapiCli()
 
 const { task } = await cli.build({
   ...options,
-  outputDir: 'build',
+  outputDir: 'dist',
   cargoOptions: build.cargoOptions,
 })
 
