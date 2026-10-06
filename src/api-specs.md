@@ -28,7 +28,7 @@ This document tabulates the standard Node.js `node:crypto` API, our implementati
 | `crypto.privateDecrypt` / `privateEncrypt` / `publicDecrypt` / `publicEncrypt` | `privateDecrypt`, `privateEncrypt`, `publicDecrypt`, `publicEncrypt` | **Compatible** | RSA public/private key encryption & decryption with `RSA_NO_PADDING`, `RSA_PKCS1_PADDING`, and `RSA_PKCS1_OAEP_PADDING`. |
 | `crypto.sign` / `createSign` | `sign`, `createSign` / `Sign` class | **Compatible** | Digital signing via `ring` & `rsa`. |
 | `crypto.verify` / `createVerify` | `verify`, `createVerify` / `Verify` class | **Compatible** | Signature verification via `ring` & `rsa`. |
-| `crypto.randomBytes` / `randomFillSync` / `randomInt` / `randomUUID` | `randomBytes`, `randomFillSync`, `randomInt`, `randomUUID` | **Compatible** | Cryptographically secure random number/byte/UUID generation via `ring::rand`. |
+| `crypto.randomBytes` / `randomFill` / `randomFillSync` / `randomInt` / `randomUUID` / `randomUUIDv7` | `randomBytes`, `randomFill`, `randomFillSync`, `randomInt`, `randomUUID`, `randomUUIDv7` | **Compatible** | Cryptographically secure random number/byte/UUID generation via `ring::rand`. |
 | `crypto.createPrivateKey` / `createPublicKey` / `createSecretKey` | `KeyObject`, `createPrivateKey`, `createPublicKey`, `createSecretKey` | **Compatible** | `KeyObject` key representations. |
 | `Class: X509Certificate` | `X509Certificate` class | **Compatible** | X.509 certificate parsing via `x509-parser`. |
 | TLS Engine & Crypto Providers | `TLS` class / `CryptoProviderType` | **Extension / Native TLS** | Exposes `rustls` with configurable backends: `ring` (default), OpenSSL (`rustls-openssl`), BoringSSL (`boring-rustls-provider`), and MbedTLS (`rustls-mbedcrypto-provider`). |
@@ -61,7 +61,6 @@ This document tabulates the standard Node.js `node:crypto` API, our implementati
 - `argon2HashRaw(password, options?): Promise<Buffer>`
 - `argon2HashRawSync(password, options?): Buffer`
 - `argon2Verify(hashed, password, options?): Promise<boolean>`
-- `argon2VerifySync(hashed, password, options?): boolean`
 - `argon2ParseOptions(hashed): ParsedHashOptions`
 
 ### 5. AEAD (`src/aead.rs`)
@@ -83,9 +82,11 @@ This document tabulates the standard Node.js `node:crypto` API, our implementati
 
 ### 8. Random (`src/rand.rs`)
 - `randomBytes(size: number): Buffer`
+- `randomFill(buffer: Uint8Array, offset?: number, size?: number): Uint8Array`
 - `randomFillSync(buffer: Uint8Array, offset?: number, size?: number): Uint8Array`
 - `randomInt(min: number, max?: number): number`
 - `randomUUID(): string`
+- `randomUUIDv7(): string`
 
 ### 9. KeyObject & Agreement & Signature (`src/key_object.rs`, `src/agreement.rs`, `src/signature.rs`)
 - `KeyObject` class, `createPrivateKey`, `createPublicKey`, `createSecretKey`

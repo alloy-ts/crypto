@@ -219,4 +219,20 @@ describe("crypto.argon2", () => {
     const isValid = await argon2Verify(hash, password);
     assert.equal(isValid, true);
   });
+
+  test("argon2 async with callback argument", () => {
+    return new Promise<void>((resolve, reject) => {
+      const parameters = { ...defaults, parallelism: 4, tagLength: 32, memory: 32 };
+      argon2("argon2id", parameters, (err: any, derivedKey: any) => {
+        try {
+          assert.equal(err, null);
+          assert.equal(Buffer.isBuffer(derivedKey), true);
+          assert.equal(derivedKey.length, 32);
+          resolve();
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+  });
 });

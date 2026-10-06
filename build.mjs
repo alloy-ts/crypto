@@ -1,4 +1,6 @@
 import { createBuildCommand, NapiCli } from '@napi-rs/cli'
+import { copyFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 
 const build = createBuildCommand(process.argv.slice(2))
 const options = build.getOptions()
@@ -11,3 +13,7 @@ const { task } = await cli.build({
 })
 
 await task
+
+for (const file of readdirSync('build')) {
+  copyFileSync(join('build', file), file)
+}
