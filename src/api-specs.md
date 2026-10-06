@@ -14,6 +14,7 @@ This document tabulates the standard Node.js `node:crypto` API signatures, our i
 | :--- | :--- | :--- | :--- |
 | `crypto.argon2(algorithm, parameters, callback)` | `argon2(algorithm: string, parameters: Argon2Parameters)` | **Compatible** (Node v24.7.0+ spec) | Asynchronous Argon2d/i/id key derivation returning `Buffer`. |
 | `crypto.argon2Sync(algorithm, parameters)` | `argon2Sync(algorithm: string, parameters: Argon2Parameters)` | **Compatible** (Node v24.7.0+ spec) | Synchronous Argon2d/i/id key derivation returning `Buffer`. |
+| `crypto.Certificate` | `Certificate` | **Compatible** | SPKAC processing (`exportChallenge`, `exportPublicKey`, `verifySpkac`) with static and legacy instance API support. |
 | `crypto.createHash(algorithm)` | `createHash(algorithm: string): Hash` | **Compatible** | Stream transform & object hashing (`sha1`, `sha256`, `sha384`, `sha512`, `sha512-256`) via `ring`. |
 | `crypto.hash(algorithm, data, outputEncoding)` | `hash(algorithm, data, outputEncoding?): string \| Buffer` | **Compatible** | One-shot digest calculation utility. |
 | `crypto.getHashes()` | `getHashes(): string[]` | **Compatible** | Returns array of supported digest algorithm names. |
@@ -51,27 +52,33 @@ This document tabulates the standard Node.js `node:crypto` API signatures, our i
 - `argon2(algorithm: string, parameters: Argon2Parameters): Promise<Buffer>`
 - `argon2Sync(algorithm: string, parameters: Argon2Parameters): Buffer`
 
-### 2. Hasher (`src/crypto_hasher.rs`)
+### 2. Certificate (`src/certificate.rs`)
+- `Certificate.exportChallenge(spkac, encoding?): Buffer`
+- `Certificate.exportPublicKey(spkac, encoding?): Buffer`
+- `Certificate.verifySpkac(spkac, encoding?): boolean`
+- `new Certificate()` (legacy API with instance `exportChallenge`, `exportPublicKey`, `verifySpkac`)
+
+### 3. Hasher (`src/crypto_hasher.rs`)
 - `createHash(algorithm: string): Hash`
 - `hash(algorithm: string, data: string | Uint8Array, outputEncoding?: string): string | Buffer`
 - `getHashes(): string[]`
 
-### 3. HMAC (`src/hmac.rs`)
+### 4. HMAC (`src/hmac.rs`)
 - `createHmac(algorithm: string, key: string | Uint8Array, encoding?: string): Hmac`
 - `new Hmac(algorithm, key, encoding)`
 - `Hmac.prototype.update(data, inputEncoding)`
 - `Hmac.prototype.digest(outputEncoding)`
 
-### 4. PBKDF2 (`src/pbkdf2.rs`)
+### 5. PBKDF2 (`src/pbkdf2.rs`)
 - `pbkdf2(password, salt, iterations, keylen, digest): Promise<Buffer>`
 - `pbkdf2Sync(password, salt, iterations, keylen, digest): Buffer`
 
-### 5. ECDH (`src/ecdh.rs`)
+### 6. ECDH (`src/ecdh.rs`)
 - `createECDH(curveName: string): ECDH`
 - `createDiffieHellman(groupOrPrime: string | number): ECDH`
 - `createDiffieHellmanGroup(name: string): ECDH`
 
-### 6. RSA (`src/rsa.rs`)
+### 7. RSA (`src/rsa.rs`)
 - `generateKeyPair(typeName: string): Promise<KeyPairResult>`
 - `generateKeyPairSync(typeName: string): KeyPairResult`
 - `publicEncrypt(keyArg, buffer): Buffer`
@@ -79,7 +86,7 @@ This document tabulates the standard Node.js `node:crypto` API signatures, our i
 - `privateEncrypt(keyArg, buffer): Buffer`
 - `publicDecrypt(keyArg, buffer): Buffer`
 
-### 7. Random (`src/random.rs`)
+### 8. Random (`src/random.rs`)
 - `randomBytes(size: number): Buffer`
 - `randomBytesAsync(size: number): Promise<Buffer>`
 - `randomFill(buffer: Uint8Array, offset?: number, size?: number): Promise<Uint8Array>`
@@ -88,7 +95,7 @@ This document tabulates the standard Node.js `node:crypto` API signatures, our i
 - `randomUUID(): string`
 - `randomUUIDv7(): string`
 
-### 8. Sign / Verify / KeyObject (`src/signature.rs`, `src/agreement.rs`, `src/key_object.rs`)
+### 9. Sign / Verify / KeyObject (`src/signature.rs`, `src/agreement.rs`, `src/key_object.rs`)
 - `createSign(algorithm: string): Sign`
 - `sign(algorithm, data, privateKey): Buffer`
 - `createVerify(algorithm: string): Verify`
@@ -98,6 +105,6 @@ This document tabulates the standard Node.js `node:crypto` API signatures, our i
 - `createPrivateKey(key: Uint8Array): KeyObject`
 - `new X509Certificate(buffer: Uint8Array)`
 
-### 9. TLS (`src/tls.rs`)
+### 10. TLS (`src/tls.rs`)
 - `new TLS(provider?: CryptoProviderType)`
 - `CryptoProviderType`: `Ring` (0), `OpenSSL` (1), `BoringSSL` (2), `MbedTLS` (3)

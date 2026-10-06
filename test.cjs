@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { createHash, createHmac, pbkdf2Sync, TLS } = require("./index.js");
+const { createHash, createHmac, pbkdf2Sync, TLS, Certificate } = require("./index.js");
 
 test("test.cjs re-exports work", () => {
   const hash = createHash("sha256").update("hello").digest("hex");
@@ -15,4 +15,8 @@ test("test.cjs re-exports work", () => {
 
   const tls = new TLS();
   assert.equal(tls.providerName, "ring");
+
+  assert.equal(typeof Certificate.exportChallenge, "function");
+  assert.equal(typeof Certificate.exportPublicKey, "function");
+  assert.equal(typeof Certificate.verifySpkac, "function");
 });
