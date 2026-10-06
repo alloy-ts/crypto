@@ -33,3 +33,6 @@ pub(crate) mod rsa;
 
 #[path = "tls.rs"]
 pub(crate) mod tls;
+
+#[path = "certificate.rs"]
+pub(crate) mod certificate;
