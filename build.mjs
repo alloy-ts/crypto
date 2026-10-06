@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs'
 import { createBuildCommand, NapiCli } from '@napi-rs/cli'
 
 const build = createBuildCommand(process.argv.slice(2))
@@ -11,3 +12,6 @@ const { task } = await cli.build({
 })
 
 await task
+
+writeFileSync('index.js', "module.exports = require('./dist/index.js')\n")
+writeFileSync('index.d.ts', "export * from './dist/index'\n")
