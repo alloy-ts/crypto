@@ -11,3 +11,13 @@ const { task } = await cli.build({
 })
 
 await task
+
+import fs from 'node:fs'
+
+fs.copyFileSync('build/index.js', 'index.js')
+fs.copyFileSync('build/index.d.ts', 'index.d.ts')
+for (const file of fs.readdirSync('build')) {
+  if (file.endsWith('.node')) {
+    fs.copyFileSync(`build/${file}`, file)
+  }
+}
