@@ -31,6 +31,15 @@ pub fn random_fill_sync(
   Ok(Uint8Array::from(vec))
 }
 
+#[napi(js_name = "randomFill")]
+pub fn random_fill(
+  buffer: Uint8Array,
+  offset: Option<u32>,
+  size: Option<u32>,
+) -> Result<Uint8Array> {
+  random_fill_sync(buffer, offset, size)
+}
+
 #[napi(js_name = "randomInt")]
 pub fn random_int(min: i64, max: Option<i64>) -> Result<i64> {
   let (low, high) = match max {
@@ -60,6 +69,39 @@ pub fn random_uuid() -> Result<String> {
   // Set version 4
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   // Set variant RFC 4122
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+  Ok(format!(
+    "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+    u32::from_be_bytes(bytes[0..4].try_into().unwrap()),
+    u16::from_be_bytes(bytes[4..6].try_into().unwrap()),
+    u16::from_be_bytes(bytes[6..8].try_into().unwrap()),
+    u16::from_be_bytes(bytes[8..10].try_into().unwrap()),
+    u64::from_be_bytes([
+      0, 0, bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+    ])
+  ))
+}
+
+#[napi(js_name = "randomUUIDv7")]
+pub fn random_uuid_v7() -> Result<String> {
+  let mut bytes = [0u8; 16];
+  let rng = SystemRandom::new();
+  rng
+    .fill(&mut bytes)
+    .map_err(|_| Error::new(Status::GenericFailure, "Random generation failed"))?;
+
+  let now_ms = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .map_err(|_| Error::new(Status::GenericFailure, "System time error"))?
+    .as_millis() as u64;
+
+  let ts_bytes = now_ms.to_be_bytes();
+  bytes[0..6].copy_from_slice(&ts_bytes[2..8]);
+
+  // Set version 7
+  bytes[6] = (bytes[6] & 0x0f) | 0x70;
+  // Set variant RFC 9562
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
 
   Ok(format!(
