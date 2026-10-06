@@ -54,7 +54,7 @@ pub fn generate_key_pair_sync(type_name: String) -> Result<KeyPairResult> {
         .map_err(|e| Error::new(Status::GenericFailure, format!("PEM encode failed: {e}")))?;
 
       Ok(KeyPairResult {
-        public_key: Buffer::from(priv_pem.as_bytes()),
+        public_key: Buffer::from(pub_pem.as_bytes()),
         private_key: Buffer::from(priv_pem.as_bytes()),
       })
     }
@@ -124,7 +124,7 @@ pub fn public_encrypt(
     .map_err(|e| Error::new(Status::InvalidArg, format!("Failed to parse public key: {e}")))?;
 
   let mut rng = OsRng;
-  let padding = opts.padding.unwrap_or(1);
+  let padding = opts.padding.unwrap_or(4); // Default RSA_PKCS1_OAEP_PADDING = 4
   let encrypted = if padding == 1 {
     pub_key.encrypt(&mut rng, Pkcs1v15Encrypt, &buffer)
   } else {
@@ -144,7 +144,7 @@ pub fn private_decrypt(
     .or_else(|_| RsaPrivateKey::from_pkcs1_pem(&pem_str))
     .map_err(|e| Error::new(Status::InvalidArg, format!("Failed to parse private key: {e}")))?;
 
-  let padding = opts.padding.unwrap_or(1);
+  let padding = opts.padding.unwrap_or(4); // Default RSA_PKCS1_OAEP_PADDING = 4
   let decrypted = if padding == 1 {
     priv_key.decrypt(Pkcs1v15Encrypt, &buffer)
   } else {
