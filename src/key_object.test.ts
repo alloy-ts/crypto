@@ -4,12 +4,13 @@ import { createSecretKey, createPublicKey, createPrivateKey, KeyType } from '../
 
 test('KeyObject exports and types', () => {
   const secretKey = createSecretKey(new Uint8Array([1, 2, 3, 4]))
-  assert.equal(secretKey.keyTypeName, 'secret')
+  assert.equal(secretKey.type, 'secret')
+  assert.equal(secretKey.symmetricKeySize, 4)
   assert.deepEqual(Array.from(secretKey.export()), [1, 2, 3, 4])
 
   const pubKey = createPublicKey(new Uint8Array([5, 6, 7]))
-  assert.equal(pubKey.keyTypeName, 'public')
+  assert.equal(pubKey.type, 'public')
 
   const privKey = createPrivateKey(new Uint8Array([8, 9]))
-  assert.equal(privKey.keyTypeName, 'private')
+  assert.equal(privKey.type, 'private')
 })

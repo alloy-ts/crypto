@@ -25,13 +25,42 @@ impl KeyObject {
     }
   }
 
-  #[napi(getter)]
-  pub fn key_type_name(&self) -> String {
+  #[napi(getter, js_name = "type")]
+  pub fn get_type(&self) -> String {
     match self.key_type {
       KeyType::Secret => "secret".to_string(),
       KeyType::Public => "public".to_string(),
       KeyType::Private => "private".to_string(),
     }
+  }
+
+  #[napi(getter, js_name = "symmetricKeySize")]
+  pub fn symmetric_key_size(&self) -> Option<u32> {
+    match self.key_type {
+      KeyType::Secret => Some(self.raw_bytes.len() as u32),
+      _ => None,
+    }
+  }
+
+  #[napi(getter, js_name = "asymmetricKeyType")]
+  pub fn asymmetric_key_type(&self) -> Option<String> {
+    match self.key_type {
+      KeyType::Secret => None,
+      _ => {
+        if self.raw_bytes.len() == 32 {
+          Some("ed25519".to_string())
+        } else {
+          Some("rsa".to_string())
+        }
+      }
+    }
+  }
+
+  #[napi]
+  pub fn equals(&self, other: &KeyObject) -> bool {
+    let self_type = self.get_type();
+    let other_type = other.get_type();
+    self_type == other_type && self.raw_bytes == other.raw_bytes
   }
 
   #[napi]
