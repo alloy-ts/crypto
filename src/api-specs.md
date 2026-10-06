@@ -1,59 +1,98 @@
 # API Specs & Node:Crypto Compatibility
 
-This document tabulates the standard Node.js `node:crypto` API, our implementation details via NAPI-RS, and compatibility status.
+This document tabulates the standard Node.js `node:crypto` API signatures, our implementation details via NAPI-RS, and compatibility status.
 
 ## Overview
 
-`@lib/crypto` provides native Node.js cryptographic implementations powered by Rust (`ring`, `rustls`, `rustls-openssl`, `boring-rustls-provider`, `rustls-mbedcrypto-provider`, and `argon2-rust`).
+`@lib/crypto` provides native Node.js cryptographic implementations powered by Rust (`ring`, `rustls`, `rustls-openssl`, `boring-rustls-provider`, `rustls-mbedcrypto-provider`, `rsa`, `sha1`, `sha2`, and `argon2-rust`).
 
 ---
 
 ## API Compatibility Table
 
-| `node:crypto` Standard API | Our Implementation | Compatibility Status | Notes / Backend |
+| Standard `node:crypto` API | Our Implementation Signature | Compatibility Status | Implementation Notes / Backend |
 | :--- | :--- | :--- | :--- |
-| `crypto.createHash(algorithm)` | `createHash(algorithm)` / `Hash` class | **Compatible** | Powered by `ring` digest routines (SHA1, SHA256, SHA384, SHA512, SHA512-256). |
-| `crypto.hash(algorithm, data, outputEncoding)` | `hash(...)` | **Compatible** | One-shot hashing utility. |
-| `crypto.getHashes()` | `getHashes()` | **Compatible** | Returns array of supported digest algorithm names. |
-| `crypto.createHmac(algorithm, key)` | `createHmac(...)` / `Hmac` class | **Compatible** | Powered by `ring::hmac` supporting `update` and `digest` with encoding options (`hex`, `base64`, `binary`). |
-| `crypto.pbkdf2(...)` | `pbkdf2(...)` | **Compatible** | Asynchronous PBKDF2 key derivation using NAPI async task & `ring::pbkdf2`. |
-| `crypto.pbkdf2Sync(...)` | `pbkdf2Sync(...)` | **Compatible** | Synchronous PBKDF2 key derivation using `ring::pbkdf2`. |
-| Argon2 Hashing & Verification | `argon2Hash`, `argon2HashSync`, `argon2Verify`, `argon2VerifySync`, `argon2ParseOptions` | **Extension / High-Perf** | Follows `@node-rs/argon2` specs using `argon2-rust` (PHC format, customizable memory/time cost/parallelism). |
-| TLS Engine & Crypto Providers | `TLS` class / `CryptoProviderType` | **Extension / Native TLS** | Exposes `rustls` with configurable backends: `ring` (default), OpenSSL (`rustls-openssl`), BoringSSL (`boring-rustls-provider`), and MbedTLS (`rustls-mbedcrypto-provider`). |
-| `crypto.createCipheriv` / `createDecipheriv` | *Planned / Out of Scope* | Not Implemented | Symmetric ciphers AES-GCM / ChaCha20-Poly1305 can be added in future iterations. |
-| `crypto.generateKeyPair` / `Sign` / `Verify` | *Planned / Out of Scope* | Not Implemented | Asymmetric RSA/ECDSA signing & key generation. |
-| `crypto.randomBytes` / `randomUUID` | *Planned / Out of Scope* | Not Implemented | Delegates to Node's built-in or `ring::rand`. |
+| `crypto.argon2(algorithm, parameters, callback)` | `argon2(algorithm: string, parameters: Argon2Parameters)` | **Compatible** (Node v24.7.0+ spec) | Asynchronous Argon2d/i/id key derivation returning `Buffer`. |
+| `crypto.argon2Sync(algorithm, parameters)` | `argon2Sync(algorithm: string, parameters: Argon2Parameters)` | **Compatible** (Node v24.7.0+ spec) | Synchronous Argon2d/i/id key derivation returning `Buffer`. |
+| `crypto.createHash(algorithm)` | `createHash(algorithm: string): Hash` | **Compatible** | Stream transform & object hashing (`sha1`, `sha256`, `sha384`, `sha512`, `sha512-256`) via `ring`. |
+| `crypto.hash(algorithm, data, outputEncoding)` | `hash(algorithm, data, outputEncoding?): string \| Buffer` | **Compatible** | One-shot digest calculation utility. |
+| `crypto.getHashes()` | `getHashes(): string[]` | **Compatible** | Returns array of supported digest algorithm names. |
+| `crypto.createHmac(algorithm, key, encoding)` | `createHmac(algorithm, key, encoding?): Hmac` | **Compatible** | HMAC creation and calculation via `ring::hmac`. |
+| `crypto.pbkdf2(password, salt, iterations, keylen, digest, callback)` | `pbkdf2(password, salt, iterations, keylen, digest): Promise<Buffer>` | **Compatible** | Asynchronous PBKDF2 key derivation using `ring::pbkdf2`. |
+| `crypto.pbkdf2Sync(password, salt, iterations, keylen, digest)` | `pbkdf2Sync(password, salt, iterations, keylen, digest): Buffer` | **Compatible** | Synchronous PBKDF2 key derivation using `ring::pbkdf2`. |
+| `crypto.createECDH(curveName)` | `createECDH(curveName: string): ECDH` | **Compatible** | Elliptic Curve Diffie-Hellman exchange (`P-256`, `P-384`, `X25519`). |
+| `crypto.createDiffieHellman(groupOrPrime)` | `createDiffieHellman(groupOrPrime)` | **Compatible** | Diffie-Hellman key exchange helper. |
+| `crypto.createDiffieHellmanGroup(name)` | `createDiffieHellmanGroup(name)` | **Compatible** | Diffie-Hellman predefined modp group wrapper. |
+| `crypto.generateKeyPair(type, options, callback)` | `generateKeyPair(typeName: string)` | **Compatible** | Asynchronous RSA and Ed25519 key pair generation. |
+| `crypto.generateKeyPairSync(type, options)` | `generateKeyPairSync(typeName: string)` | **Compatible** | Synchronous RSA and Ed25519 key pair generation. |
+| `crypto.publicEncrypt(key, buffer)` | `publicEncrypt(keyArg, buffer)` | **Compatible** | RSA public key encryption with PKCS1v15, OAEP (SHA1/SHA256/384/512), and NoPadding modes. |
+| `crypto.privateDecrypt(privateKey, buffer)` | `privateDecrypt(keyArg, buffer)` | **Compatible** | RSA private key decryption with PKCS1v15, OAEP, and NoPadding modes. |
+| `crypto.privateEncrypt(privateKey, buffer)` | `privateEncrypt(keyArg, buffer)` | **Compatible** | RSA private key encryption. |
+| `crypto.publicDecrypt(key, buffer)` | `publicDecrypt(keyArg, buffer)` | **Compatible** | RSA public key decryption. |
+| `crypto.randomBytes(size, callback)` | `randomBytes(size: number): Buffer` | **Compatible** | Cryptographically secure random byte generation via `ring::rand`. |
+| `crypto.randomFillSync(buffer, offset, size)` | `randomFillSync(buffer, offset?, size?): Uint8Array` | **Compatible** | Synchronous random buffer fill. |
+| `crypto.randomInt(min, max)` | `randomInt(min: number, max?: number): number` | **Compatible** | Unbiased random integer generation. |
+| `crypto.randomUUID()` | `randomUUID(): string` | **Compatible** | RFC 4122 version 4 UUID generator. |
+| `crypto.createSign(algorithm)` / `crypto.sign(...)` | `createSign(algorithm) / sign(algorithm, data, key)` | **Compatible** | Digital signature generation (Ed25519, ECDSA P-256). |
+| `crypto.createVerify(algorithm)` / `crypto.verify(...)` | `createVerify(algorithm) / verify(algorithm, data, key, sig)` | **Compatible** | Digital signature verification. |
+| `crypto.createSecretKey` / `createPublicKey` / `createPrivateKey` | `createSecretKey / createPublicKey / createPrivateKey` | **Compatible** | Key object factory functions returning `KeyObject`. |
+| `Class: KeyObject` | `KeyObject` | **Compatible** | Key representation for secret, public, and private keys. |
+| `Class: X509Certificate` | `X509Certificate` | **Compatible** | X.509 certificate parsing (`subject`, `issuer`, `raw`) via `x509-parser`. |
+| AEAD Encryption / Decryption | `encryptAead` / `decryptAead` | **Extension** | High-performance AES-GCM and ChaCha20-Poly1305 AEAD routines. |
+| TLS Engine & Crypto Providers | `TLS` class / `CryptoProviderType` | **Extension** | Exposes `rustls` with configurable backends (`ring`, `rustls-openssl`, `boring-rustls-provider`, `rustls-mbedcrypto-provider`). |
 
 ---
 
 ## Module Reference
 
-### 1. Hasher (`src/crypto_hasher.rs`)
+### 1. Argon2 (`src/argon2.rs`)
+- `argon2(algorithm: string, parameters: Argon2Parameters): Promise<Buffer>`
+- `argon2Sync(algorithm: string, parameters: Argon2Parameters): Buffer`
+
+### 2. Hasher (`src/crypto_hasher.rs`)
 - `createHash(algorithm: string): Hash`
 - `hash(algorithm: string, data: string | Uint8Array, outputEncoding?: string): string | Buffer`
 - `getHashes(): string[]`
 
-### 2. HMAC (`src/hmac.rs`)
+### 3. HMAC (`src/hmac.rs`)
 - `createHmac(algorithm: string, key: string | Uint8Array, encoding?: string): Hmac`
 - `new Hmac(algorithm, key, encoding)`
 - `Hmac.prototype.update(data, inputEncoding)`
 - `Hmac.prototype.digest(outputEncoding)`
 
-### 3. PBKDF2 (`src/pbkdf2.rs`)
+### 4. PBKDF2 (`src/pbkdf2.rs`)
 - `pbkdf2(password, salt, iterations, keylen, digest): Promise<Buffer>`
 - `pbkdf2Sync(password, salt, iterations, keylen, digest): Buffer`
 
-### 4. Argon2 (`src/argon2.rs`)
-- `argon2Hash(password, options?, abortSignal?): Promise<string>`
-- `argon2HashSync(password, options?): string`
-- `argon2HashRaw(password, options?): Promise<Buffer>`
-- `argon2HashRawSync(password, options?): Buffer`
-- `argon2Verify(hashed, password, options?): Promise<boolean>`
-- `argon2VerifySync(hashed, password, options?): boolean`
-- `argon2ParseOptions(hashed): ParsedHashOptions`
+### 5. ECDH (`src/ecdh.rs`)
+- `createECDH(curveName: string): ECDH`
+- `createDiffieHellman(groupOrPrime: string | number): ECDH`
+- `createDiffieHellmanGroup(name: string): ECDH`
 
-### 5. TLS (`src/tls.rs`)
+### 6. RSA (`src/rsa.rs`)
+- `generateKeyPair(typeName: string): Promise<KeyPairResult>`
+- `generateKeyPairSync(typeName: string): KeyPairResult`
+- `publicEncrypt(keyArg, buffer): Buffer`
+- `privateDecrypt(keyArg, buffer): Buffer`
+- `privateEncrypt(keyArg, buffer): Buffer`
+- `publicDecrypt(keyArg, buffer): Buffer`
+
+### 7. Random (`src/rand.rs`)
+- `randomBytes(size: number): Buffer`
+- `randomFillSync(buffer, offset?, size?): Uint8Array`
+- `randomInt(min: number, max?: number): number`
+- `randomUUID(): string`
+
+### 8. Sign / Verify / KeyObject (`src/signature.rs`, `src/agreement.rs`, `src/key_object.rs`)
+- `createSign(algorithm: string): Sign`
+- `sign(algorithm, data, privateKey): Buffer`
+- `createVerify(algorithm: string): Verify`
+- `verify(algorithm, data, publicKey, signature): boolean`
+- `createSecretKey(key: Uint8Array): KeyObject`
+- `createPublicKey(key: Uint8Array): KeyObject`
+- `createPrivateKey(key: Uint8Array): KeyObject`
+- `new X509Certificate(buffer: Uint8Array)`
+
+### 9. TLS (`src/tls.rs`)
 - `new TLS(provider?: CryptoProviderType)`
 - `CryptoProviderType`: `Ring` (0), `OpenSSL` (1), `BoringSSL` (2), `MbedTLS` (3)
-- `TLS.prototype.providerName: string`
-- `TLS.prototype.isSupported(): boolean`
