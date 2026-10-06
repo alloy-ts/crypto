@@ -175,20 +175,33 @@ fn is_prime_miller_rabin(n: &BigUint, k: usize) -> bool {
 
 #[napi(js_name = "generatePrimeSync")]
 pub fn generate_prime_sync(size: u32) -> Result<Buffer> {
+  if size < 2 {
+    return Err(Error::new(
+      Status::InvalidArg,
+      "size must be at least 2 bits",
+    ));
+  }
   let bytes_count = ((size + 7) / 8) as usize;
   let rng = SystemRandom::new();
   let mut buf = vec![0u8; bytes_count];
+
+  let bit_in_top_byte = (size - 1) % 8;
+  let mask = 1u8 << bit_in_top_byte;
 
   loop {
     rng
       .fill(&mut buf)
       .map_err(|_| Error::new(Status::GenericFailure, "Random generation failed"))?;
-    if let Some(first) = buf.first_mut() {
-      *first |= 0x80;
-    }
-    if let Some(last) = buf.last_mut() {
-      *last |= 0x01;
-    }
+
+    // Mask out bits higher than `size`
+    let top_mask = (1u16 << (bit_in_top_byte + 1)) - 1;
+    buf[0] &= top_mask as u8;
+
+    // Set top bit to ensure bit size
+    buf[0] |= mask;
+
+    // Set LSB to ensure odd number
+    buf[bytes_count - 1] |= 0x01;
 
     let n = BigUint::from_bytes_be(&buf);
     if is_prime_miller_rabin(&n, 10) {

@@ -467,22 +467,6 @@ pub fn argon2_verify(
   ))
 }
 
-#[napi(js_name = "argon2VerifySync")]
-pub fn argon2_verify_sync(
-  env: Env,
-  hashed: Either<String, Uint8Array>,
-  password: Either<String, Uint8Array>,
-  options: Option<Options>,
-) -> Result<bool> {
-  let mut verify_task = VerifyTask {
-    password: utf8_input(password)?,
-    hashed: utf8_input(hashed)?,
-    options: options.unwrap_or_default(),
-  };
-  let output = verify_task.compute()?;
-  verify_task.resolve(env, output)
-}
-
 #[napi(js_name = "argon2ParseOptions")]
 pub fn argon2_parse_options(hashed: Either<String, Uint8Array>) -> Result<ParsedHashOptions> {
   let encoded = utf8_input(hashed)?;

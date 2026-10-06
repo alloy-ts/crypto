@@ -6,7 +6,6 @@ import crypto, {
   argon2Hash,
   argon2HashSync,
   argon2Verify,
-  argon2VerifySync,
   argon2ParseOptions,
   Algorithm,
   Version,
@@ -190,7 +189,7 @@ describe("crypto.argon2", () => {
     );
   });
 
-  test("argon2HashSync and argon2VerifySync PHC string hashing", () => {
+  test("argon2HashSync and argon2Verify PHC string hashing", async () => {
     const password = "my-secret-password";
     const hash = argon2HashSync(password, {
       algorithm: Algorithm.Argon2id,
@@ -198,10 +197,10 @@ describe("crypto.argon2", () => {
     });
     assert.ok(hash.startsWith("$argon2id$v=19$"));
 
-    const isValid = argon2VerifySync(hash, password);
+    const isValid = await argon2Verify(hash, password);
     assert.equal(isValid, true);
 
-    const isInvalid = argon2VerifySync(hash, "wrong-password");
+    const isInvalid = await argon2Verify(hash, "wrong-password");
     assert.equal(isInvalid, false);
 
     const parsed = argon2ParseOptions(hash);

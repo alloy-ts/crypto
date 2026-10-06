@@ -93,13 +93,43 @@ const MODP14_PRIME_HEX: &str = concat!(
   "2b0906806509171f114c00ef12da542f"
 );
 
+#[napi(object, object_to_js = false)]
+#[derive(Default)]
+pub struct DiffieHellmanOptions {
+  pub private_key: Option<Either<String, Uint8Array>>,
+  pub public_key: Option<Either<String, Uint8Array>>,
+}
+
+fn extract_key_bytes(input: Either<String, Uint8Array>) -> Vec<u8> {
+  match input {
+    Either::A(s) => s.into_bytes(),
+    Either::B(b) => b.to_vec(),
+  }
+}
+
 #[napi(js_name = "diffieHellman")]
 pub fn diffie_hellman(
-  private_key_bytes: Uint8Array,
-  public_key_bytes: Uint8Array,
+  first_arg: Either<Uint8Array, DiffieHellmanOptions>,
+  second_arg: Option<Uint8Array>,
 ) -> Result<Buffer> {
-  let priv_num = rsa::BigUint::from_bytes_be(&private_key_bytes);
-  let pub_num = rsa::BigUint::from_bytes_be(&public_key_bytes);
+  let (priv_bytes, pub_bytes) = match first_arg {
+    Either::A(priv_k) => {
+      let pub_k = second_arg.ok_or_else(|| Error::new(Status::InvalidArg, "Missing public key"))?;
+      (priv_k.to_vec(), pub_k.to_vec())
+    }
+    Either::B(opts) => {
+      let priv_k = opts
+        .private_key
+        .ok_or_else(|| Error::new(Status::InvalidArg, "Missing privateKey option"))?;
+      let pub_k = opts
+        .public_key
+        .ok_or_else(|| Error::new(Status::InvalidArg, "Missing publicKey option"))?;
+      (extract_key_bytes(priv_k), extract_key_bytes(pub_k))
+    }
+  };
+
+  let priv_num = rsa::BigUint::from_bytes_be(&priv_bytes);
+  let pub_num = rsa::BigUint::from_bytes_be(&pub_bytes);
   let prime_bytes = hex::decode(MODP14_PRIME_HEX)
     .map_err(|e| Error::new(Status::GenericFailure, format!("Hex decode error: {e}")))?;
   let prime_num = rsa::BigUint::from_bytes_be(&prime_bytes);
