@@ -4,7 +4,7 @@ This document tabulates the standard Node.js `node:crypto` API, our implementati
 
 ## Overview
 
-`@lib/crypto` provides native Node.js cryptographic implementations powered by Rust (`ring`, `rustls`, `rustls-openssl`, `boring-rustls-provider`, `rustls-mbedcrypto-provider`, and `argon2-rust`).
+`@lib/crypto` provides native Node.js cryptographic implementations powered by Rust (`ring`, `rustls`, `rustls-openssl`, `boring-rustls-provider`, `rustls-mbedcrypto-provider`, `rsa`, and `argon2-rust`).
 
 ---
 
@@ -20,9 +20,17 @@ This document tabulates the standard Node.js `node:crypto` API, our implementati
 | `crypto.pbkdf2Sync(...)` | `pbkdf2Sync(...)` | **Compatible** | Synchronous PBKDF2 key derivation using `ring::pbkdf2`. |
 | Argon2 Hashing & Verification | `argon2Hash`, `argon2HashSync`, `argon2Verify`, `argon2VerifySync`, `argon2ParseOptions` | **Extension / High-Perf** | Follows `@node-rs/argon2` specs using `argon2-rust` (PHC format, customizable memory/time cost/parallelism). |
 | TLS Engine & Crypto Providers | `TLS` class / `CryptoProviderType` | **Extension / Native TLS** | Exposes `rustls` with configurable backends: `ring` (default), OpenSSL (`rustls-openssl`), BoringSSL (`boring-rustls-provider`), and MbedTLS (`rustls-mbedcrypto-provider`). |
-| `crypto.createCipheriv` / `createDecipheriv` | *Planned / Out of Scope* | Not Implemented | Symmetric ciphers AES-GCM / ChaCha20-Poly1305 can be added in future iterations. |
-| `crypto.generateKeyPair` / `Sign` / `Verify` | *Planned / Out of Scope* | Not Implemented | Asymmetric RSA/ECDSA signing & key generation. |
-| `crypto.randomBytes` / `randomUUID` | *Planned / Out of Scope* | Not Implemented | Delegates to Node's built-in or `ring::rand`. |
+| `crypto.randomBytes(size[, callback])` | `randomBytes(size[, callback])` | **Compatible** | Cryptographically secure pseudorandom byte generation via `ring::rand`. Supports synchronous and asynchronous invocation. |
+| `crypto.randomFill(buffer[, offset][, size], callback)` | `randomFill(...)` | **Compatible** | Asynchronous buffer filling via `ring::rand`. |
+| `crypto.randomFillSync(buffer[, offset][, size])` | `randomFillSync(...)` | **Compatible** | Synchronous buffer filling via `ring::rand`. |
+| `crypto.randomInt([min, ]max[, callback])` | `randomInt(...)` | **Compatible** | Unbiased random integer generation avoiding modulo bias via rejection sampling. |
+| `crypto.randomUUID([options])` | `randomUUID([options])` | **Compatible** | Generates RFC 4122 version 4 UUID. |
+| `crypto.randomUUIDv7([options])` | `randomUUIDv7([options])` | **Compatible** | Generates RFC 9562 version 7 UUID with 48-bit millisecond Unix timestamp. |
+| `crypto.encryptAead` / `decryptAead` | `encryptAead`, `decryptAead` | **Compatible** | AEAD AES-GCM & ChaCha20-Poly1305 ciphers powered by `ring::aead`. |
+| `crypto.createECDH` / `ECDH` | `createECDH`, `ECDH` | **Compatible** | Elliptic Curve Diffie-Hellman key exchange via `ring`. |
+| `crypto.generateKeyPair` / `generateKeyPairSync` | `generateKeyPair`, `generateKeyPairSync` | **Compatible** | Asymmetric RSA and Ed25519 key generation via `rsa` and `ring`. |
+| `crypto.publicEncrypt` / `privateDecrypt` | `publicEncrypt`, `privateDecrypt`, etc. | **Compatible** | RSA public/private encryption & decryption with OAEP, PKCS1v15, and NoPadding support. |
+| `crypto.sign` / `verify` / `Sign` / `Verify` | `sign`, `verify`, `Sign`, `Verify` | **Compatible** | Digital signature generation and verification via `ring::signature`. |
 
 ---
 
@@ -57,3 +65,11 @@ This document tabulates the standard Node.js `node:crypto` API, our implementati
 - `CryptoProviderType`: `Ring` (0), `OpenSSL` (1), `BoringSSL` (2), `MbedTLS` (3)
 - `TLS.prototype.providerName: string`
 - `TLS.prototype.isSupported(): boolean`
+
+### 6. Random (`src/random.rs`)
+- `randomBytes(size: number, callback?: Function): Buffer | void`
+- `randomFill(buffer: Uint8Array, offset?: number, size?: number, callback?: Function): void`
+- `randomFillSync(buffer: Uint8Array, offset?: number, size?: number): Uint8Array`
+- `randomInt(min?: number, max: number, callback?: Function): number | void`
+- `randomUUID(options?: RandomUuidOptions): string`
+- `randomUUIDv7(options?: RandomUuidOptions): string`
