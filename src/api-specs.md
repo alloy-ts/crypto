@@ -74,7 +74,7 @@ This document tabulates the standard Node.js `node:crypto` API, our implementati
 - `privateEncrypt(key, buffer): Buffer`
 - `publicDecrypt(key, buffer): Buffer`
 
-### 8. Random (`src/rand.rs`)
+### 8. Random (`src/random.rs`)
 - `randomBytes(size): Buffer`
 - `randomFillSync(buffer, offset?, size?): Uint8Array`
 - `randomInt(min, max?): number`
