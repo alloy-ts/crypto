@@ -38,9 +38,14 @@ impl TLS {
   pub fn get_rustls_provider(&self) -> Arc<CryptoProvider> {
     match self.provider_type {
       CryptoProviderType::Ring => Arc::new(rustls::crypto::ring::default_provider()),
+      #[cfg(not(target_arch = "wasm32"))]
       CryptoProviderType::OpenSSL => Arc::new(rustls_openssl::default_provider()),
+      #[cfg(not(target_arch = "wasm32"))]
       CryptoProviderType::BoringSSL => Arc::new(boring_rustls_provider::provider()),
+      #[cfg(not(target_arch = "wasm32"))]
       CryptoProviderType::MbedTLS => Arc::new(rustls_mbedcrypto_provider::mbedtls_crypto_provider()),
+      #[cfg(target_arch = "wasm32")]
+      _ => Arc::new(rustls::crypto::ring::default_provider()),
     }
   }
 
