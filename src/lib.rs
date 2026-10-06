@@ -19,6 +19,9 @@ pub(crate) mod aead;
 #[path = "argon2.rs"]
 pub(crate) mod argon2;
 
+#[path = "certificate.rs"]
+pub(crate) mod certificate;
+
 #[path = "ecdh.rs"]
 pub(crate) mod ecdh;
 

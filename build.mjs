@@ -239,6 +239,20 @@ nativeBinding.argon2 = argon2;
 module.exports.argon2Sync = argon2Sync;
 module.exports.argon2 = argon2;
 
+// Add static methods to Certificate class for compatibility
+if (nativeBinding.Certificate) {
+  const CertClass = nativeBinding.Certificate;
+  CertClass.exportChallenge = function(spkac) {
+    return new CertClass().exportChallenge(spkac);
+  };
+  CertClass.exportPublicKey = function(spkac) {
+    return new CertClass().exportPublicKey(spkac);
+  };
+  CertClass.verifySpkac = function(spkac) {
+    return new CertClass().verifySpkac(spkac);
+  };
+}
+
 // Wrap RSA functions for code validation
 function wrapRsaKeyOp(fn) {
   return function(key, buffer) {
