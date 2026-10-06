@@ -29,10 +29,12 @@ This document tabulates the standard Node.js `node:crypto` API signatures, our i
 | `crypto.privateDecrypt(privateKey, buffer)` | `privateDecrypt(keyArg, buffer)` | **Compatible** | RSA private key decryption with PKCS1v15, OAEP, and NoPadding modes. |
 | `crypto.privateEncrypt(privateKey, buffer)` | `privateEncrypt(keyArg, buffer)` | **Compatible** | RSA private key encryption. |
 | `crypto.publicDecrypt(key, buffer)` | `publicDecrypt(keyArg, buffer)` | **Compatible** | RSA public key decryption. |
-| `crypto.randomBytes(size, callback)` | `randomBytes(size: number): Buffer` | **Compatible** | Cryptographically secure random byte generation via `ring::rand`. |
+| `crypto.randomBytes(size, callback)` | `randomBytes(size: number): Buffer` / `randomBytesAsync(size): Promise<Buffer>` | **Compatible** | Cryptographically secure random byte generation via `ring::rand`. |
+| `crypto.randomFill(buffer, offset, size, callback)` | `randomFill(buffer, offset?, size?): Promise<Uint8Array>` | **Compatible** | Asynchronous random buffer fill via `ring::rand`. |
 | `crypto.randomFillSync(buffer, offset, size)` | `randomFillSync(buffer, offset?, size?): Uint8Array` | **Compatible** | Synchronous random buffer fill. |
 | `crypto.randomInt(min, max)` | `randomInt(min: number, max?: number): number` | **Compatible** | Unbiased random integer generation. |
 | `crypto.randomUUID()` | `randomUUID(): string` | **Compatible** | RFC 4122 version 4 UUID generator. |
+| `crypto.randomUUIDv7()` | `randomUUIDv7(): string` | **Compatible** (Node v26.1.0+ spec) | RFC 9562 version 7 time-ordered UUID generator. |
 | `crypto.createSign(algorithm)` / `crypto.sign(...)` | `createSign(algorithm) / sign(algorithm, data, key)` | **Compatible** | Digital signature generation (Ed25519, ECDSA P-256). |
 | `crypto.createVerify(algorithm)` / `crypto.verify(...)` | `createVerify(algorithm) / verify(algorithm, data, key, sig)` | **Compatible** | Digital signature verification. |
 | `crypto.createSecretKey` / `createPublicKey` / `createPrivateKey` | `createSecretKey / createPublicKey / createPrivateKey` | **Compatible** | Key object factory functions returning `KeyObject`. |
@@ -77,11 +79,14 @@ This document tabulates the standard Node.js `node:crypto` API signatures, our i
 - `privateEncrypt(keyArg, buffer): Buffer`
 - `publicDecrypt(keyArg, buffer): Buffer`
 
-### 7. Random (`src/rand.rs`)
+### 7. Random (`src/random.rs`)
 - `randomBytes(size: number): Buffer`
-- `randomFillSync(buffer, offset?, size?): Uint8Array`
+- `randomBytesAsync(size: number): Promise<Buffer>`
+- `randomFill(buffer: Uint8Array, offset?: number, size?: number): Promise<Uint8Array>`
+- `randomFillSync(buffer: Uint8Array, offset?: number, size?: number): Uint8Array`
 - `randomInt(min: number, max?: number): number`
 - `randomUUID(): string`
+- `randomUUIDv7(): string`
 
 ### 8. Sign / Verify / KeyObject (`src/signature.rs`, `src/agreement.rs`, `src/key_object.rs`)
 - `createSign(algorithm: string): Sign`
