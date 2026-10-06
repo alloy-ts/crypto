@@ -61,6 +61,11 @@ pub fn random_bytes(size: f64) -> Result<Buffer> {
   Ok(Buffer::from(bytes))
 }
 
+#[napi(js_name = "randomBytesAsync")]
+pub fn random_bytes_async(size: f64) -> Result<Buffer> {
+  random_bytes(size)
+}
+
 #[napi(js_name = "randomFillSync")]
 pub fn random_fill_sync(
   mut buffer: Uint8Array,
@@ -157,9 +162,7 @@ pub fn random_uuid(_options: Option<RandomUuidOptions>) -> Result<String> {
     .fill(&mut bytes)
     .map_err(|_| Error::new(Status::GenericFailure, "Random generation failed"))?;
 
-  // Set version 4 (0100) in bits 48..51
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  // Set variant RFC 4122 (10xx) in bits 64..65
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
 
   Ok(format!(
@@ -187,7 +190,6 @@ pub fn random_uuid_v7(_options: Option<RandomUuidOptions>) -> Result<String> {
     .map_err(|_| Error::new(Status::GenericFailure, "System time error"))?
     .as_millis() as u64;
 
-  // 48-bit timestamp in most significant 48 bits (bytes 0..6)
   bytes[0] = ((now_ms >> 40) & 0xff) as u8;
   bytes[1] = ((now_ms >> 32) & 0xff) as u8;
   bytes[2] = ((now_ms >> 24) & 0xff) as u8;
@@ -195,10 +197,7 @@ pub fn random_uuid_v7(_options: Option<RandomUuidOptions>) -> Result<String> {
   bytes[4] = ((now_ms >> 8) & 0xff) as u8;
   bytes[5] = (now_ms & 0xff) as u8;
 
-  // Set version 7 (0111) in bits 48..51 (high nibble of byte 6)
   bytes[6] = (bytes[6] & 0x0f) | 0x70;
-
-  // Set variant RFC 4122 (10xx) in bits 64..65 (high 2 bits of byte 8)
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
 
   Ok(format!(

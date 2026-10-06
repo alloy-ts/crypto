@@ -1,4 +1,5 @@
 use argon2_rust::{
+  error::Error as Argon2Error,
   params::{Memory, TagLen},
   Algorithm as Argon2Algorithm, Argon2, Params, Version as Argon2Version,
 };
