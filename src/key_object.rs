@@ -85,6 +85,37 @@ impl X509Certificate {
   }
 }
 
+#[napi]
+pub struct Certificate;
+
+#[napi]
+impl Certificate {
+  #[napi(constructor)]
+  pub fn new() -> Self {
+    Self
+  }
+
+  #[napi(factory)]
+  pub fn create() -> Self {
+    Self
+  }
+
+  #[napi]
+  pub fn export_challenge(_spkac: Uint8Array) -> Buffer {
+    Buffer::from(Vec::new())
+  }
+
+  #[napi]
+  pub fn export_public_key(_spkac: Uint8Array) -> Buffer {
+    Buffer::from(Vec::new())
+  }
+
+  #[napi]
+  pub fn verify_spkac(_spkac: Uint8Array) -> bool {
+    true
+  }
+}
+
 #[napi(js_name = "createSecretKey")]
 pub fn create_secret_key(key: Uint8Array) -> KeyObject {
   KeyObject::new(KeyType::Secret, key)

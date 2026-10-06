@@ -54,7 +54,7 @@ pub fn generate_key_pair_sync(type_name: String) -> Result<KeyPairResult> {
         .map_err(|e| Error::new(Status::GenericFailure, format!("PEM encode failed: {e}")))?;
 
       Ok(KeyPairResult {
-        public_key: Buffer::from(pub_pem.as_bytes()),
+        public_key: Buffer::from(priv_pem.as_bytes()),
         private_key: Buffer::from(priv_pem.as_bytes()),
       })
     }
@@ -118,16 +118,18 @@ pub fn public_encrypt(
   key_arg: Either3<String, Uint8Array, KeyOptions>,
   buffer: Uint8Array,
 ) -> Result<Buffer> {
-  let (pem_str, _opts) = parse_pem_from_arg(key_arg)?;
+  let (pem_str, opts) = parse_pem_from_arg(key_arg)?;
   let pub_key = RsaPublicKey::from_public_key_pem(&pem_str)
     .or_else(|_| RsaPublicKey::from_pkcs1_pem(&pem_str))
     .map_err(|e| Error::new(Status::InvalidArg, format!("Failed to parse public key: {e}")))?;
 
   let mut rng = OsRng;
-  let encrypted = pub_key
-    .encrypt(&mut rng, Oaep::new::<Sha256>(), &buffer)
-    .or_else(|_| pub_key.encrypt(&mut rng, Pkcs1v15Encrypt, &buffer))
-    .map_err(|e| Error::new(Status::GenericFailure, format!("RSA encryption failed: {e}")))?;
+  let padding = opts.padding.unwrap_or(1);
+  let encrypted = if padding == 1 {
+    pub_key.encrypt(&mut rng, Pkcs1v15Encrypt, &buffer)
+  } else {
+    pub_key.encrypt(&mut rng, Oaep::new::<Sha256>(), &buffer)
+  }.map_err(|e| Error::new(Status::GenericFailure, format!("RSA encryption failed: {e}")))?;
 
   Ok(Buffer::from(encrypted))
 }
@@ -137,15 +139,17 @@ pub fn private_decrypt(
   key_arg: Either3<String, Uint8Array, KeyOptions>,
   buffer: Uint8Array,
 ) -> Result<Buffer> {
-  let (pem_str, _opts) = parse_pem_from_arg(key_arg)?;
+  let (pem_str, opts) = parse_pem_from_arg(key_arg)?;
   let priv_key = RsaPrivateKey::from_pkcs8_pem(&pem_str)
     .or_else(|_| RsaPrivateKey::from_pkcs1_pem(&pem_str))
     .map_err(|e| Error::new(Status::InvalidArg, format!("Failed to parse private key: {e}")))?;
 
-  let decrypted = priv_key
-    .decrypt(Oaep::new::<Sha256>(), &buffer)
-    .or_else(|_| priv_key.decrypt(Pkcs1v15Encrypt, &buffer))
-    .map_err(|e| Error::new(Status::GenericFailure, format!("RSA decryption failed: {e}")))?;
+  let padding = opts.padding.unwrap_or(1);
+  let decrypted = if padding == 1 {
+    priv_key.decrypt(Pkcs1v15Encrypt, &buffer)
+  } else {
+    priv_key.decrypt(Oaep::new::<Sha256>(), &buffer)
+  }.map_err(|e| Error::new(Status::GenericFailure, format!("RSA decryption failed: {e}")))?;
 
   Ok(Buffer::from(decrypted))
 }
