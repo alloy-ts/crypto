@@ -45,6 +45,16 @@ function git(args: string[]): void {
   execFileSync("git", args, { cwd: root, stdio: "inherit" });
 }
 
+function npm(args: string[]): void {
+  execFileSync("npm", args, { cwd: root, stdio: "inherit" });
+}
+
+// `prepare` is triggered by `npm install`, `npm ci`, `npm pack` and `npm publish`
+// (npm_lifecycle_event is always "prepare" in those cases; npm_command tells us
+// the parent command). Those are exactly the events that should also produce a
+// build, so we trigger one from setup on that set.
+const BUILD_TRIGGER_COMMANDS = new Set(["install", "ci", "pack", "publish"]);
+
 function vp(args: string[]): void {
   // Prefer the locally-installed CLI; fall back to npx when it is not on PATH
   // (e.g. when setup.ts is run directly rather than via an npm script).
@@ -60,6 +70,11 @@ function vp(args: string[]): void {
 }
 
 function main(): void {
+  const lifecycleEvent = process.env["npm_lifecycle_event"] ?? "";
+  const npmCommand = process.env["npm_command"] ?? "";
+  console.log(`[setup] npm_lifecycle_event = ${lifecycleEvent || "(none)"}`);
+  console.log(`[setup] npm_command = ${npmCommand || "(none)"}`);
+
   const manifest = readFileSync(join(root, "repository.manifest.yml"), "utf8");
   const entries = parseManifestConfig(manifest);
   if (entries.length === 0) {
@@ -84,6 +99,16 @@ function main(): void {
   for (const { key, value } of entries) {
     console.log(`[setup] git config --local ${key} ${value}`);
     git(["config", "--local", key, value]);
+  }
+
+  // Build on the events that trigger `prepare` and want a build. When setup.ts
+  // is run directly (`npm run prepare`, npm_command = "run-script") we skip the
+  // build so it can be invoked standalone without rebuilding.
+  if (BUILD_TRIGGER_COMMANDS.has(npmCommand)) {
+    console.log(`[setup] ${npmCommand} triggers a build — running npm run build`);
+    npm(["run", "build"]);
+  } else {
+    console.log(`[setup] no build for lifecycle event "${lifecycleEvent || "none"}"`);
   }
 
   console.log("[setup] repository setup complete");
