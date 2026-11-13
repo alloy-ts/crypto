@@ -37,11 +37,76 @@ function printIntegrityDiagnostics(): void {
   console.log(`[build] npm_package_integrity = ${integrity || "(undefined)"}`);
 }
 
-// The build id is the current HEAD short sha (7 chars). It is deterministic per
-// commit, so a build only needs to re-run when HEAD changes or the built binary
-// no longer matches what was recorded under refs/builds/<id>.
+// The build id is the current HEAD *full* sha (40 hex chars). The shorter
+// shorthand aliases are derived from it but the canonical id is always the full
+// sha, so two different commits can never collide on the canonical ref.
 function computeBuildId(): string {
-  return git(["rev-parse", "--short=7", "HEAD"]);
+  return git(["rev-parse", "HEAD"]);
+}
+
+// Resolve the object an exact leaf ref points at, or undefined when that exact
+// ref does not exist. `git rev-parse --verify --quiet` returns the oid on
+// success and fails silently (exit 1, no stderr) when the ref is missing, so it
+// doubles as a clean existence probe.
+function refLeafOid(ref: string): string | undefined {
+  try {
+    const out = execFileSync("git", ["rev-parse", "--verify", "--quiet", ref], {
+      cwd: root,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+    return out || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Create a short, human-friendly alias for a build's recorded blob. The alias
+// lives under refs/builds/short/<len>/<prefix> (length-segmented) because git
+// forbids a ref whose name is a prefix of another ref's name — and a shorter
+// shorthand is always a textual prefix of a longer one (or of the full sha). The
+// length segment removes that ambiguity so collisions can be resolved by
+// extending the prefix (7 -> 8 -> 9 -> ...) until the alias name is unique.
+//
+// The alias's value is the same blob oid as the canonical refs/builds/<full>/<oid>
+// ref, so resolving it "redirects" to the longer sha's recorded binary.
+//
+// `prevOid` is the blob this build's alias previously pointed at (when a build
+// is re-recorded after a binary change but the same HEAD). In that case we
+// update the existing alias in place rather than treating it as a foreign
+// collision and extending the prefix.
+function ensureShorthand(fullSha: string, oid: string, prevOid?: string): void {
+  let len = 7;
+  while (len <= fullSha.length) {
+    const cand = fullSha.slice(0, len);
+    const ref = `refs/builds/short/${len}/${cand}`;
+    const existing = refLeafOid(ref);
+    if (existing === undefined) {
+      git(["update-ref", ref, oid]);
+      console.log(`[build] shorthand alias ${ref} -> blob ${oid}`);
+      return;
+    }
+    if (existing === oid) {
+      // Already correct (e.g. re-recorded to the same binary).
+      console.log(`[build] shorthand alias ${ref} already points at ${oid}`);
+      return;
+    }
+    if (prevOid !== undefined && existing === prevOid) {
+      // This build's own alias from a previous recording; update in place.
+      git(["update-ref", ref, oid]);
+      console.log(`[build] shorthand alias ${ref} updated -> blob ${oid}`);
+      return;
+    }
+    // Alias name taken by a *different* build's blob -> collision. Extend.
+    len++;
+  }
+  // Would only happen if every prefix up to the full sha collided, which is
+  // impossible in practice; the full-sha canonical ref remains authoritative.
+  console.log(
+    `[build] no unique shorthand available for ${fullSha.slice(0, 7)}..; ` +
+      `canonical refs/builds/${fullSha} is authoritative`,
+  );
 }
 
 // The recorded exe oid for a build id, taken from refs/builds/<id>/<exe-oid>
@@ -103,7 +168,7 @@ async function runBuild(): Promise<void> {
 
   const buildId = computeBuildId();
   const outDir = join("dist", buildId);
-  console.log(`[build] buildId = ${buildId} (HEAD short sha)`);
+  console.log(`[build] buildId = ${buildId} (HEAD full sha)`);
   console.log(`[build] napi output dir = ${outDir}`);
 
   // Decide whether a rebuild is actually needed:
@@ -162,8 +227,21 @@ async function runBuild(): Promise<void> {
   run("npm", ["run", "check"]);
 
   // Record each built .node binary as a git blob and expose its oid via
-  // refs/builds/<buildId>/<exe-oid>.
+  // refs/builds/<buildId>/<exe-oid>. A re-record (same HEAD, new binary) must
+  // drop the previous canonical child(ren) first so the recorded oid stays
+  // single-valued.
   console.log("[build] check passed — recording native binary build artifact(s)");
+  const prevOid = getRecordedOid(buildId);
+  if (prevOid !== undefined) {
+    const stale = git(["for-each-ref", "--format=%(refname)", `refs/builds/${buildId}`])
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const r of stale) {
+      git(["update-ref", "-d", r]);
+      console.log(`[build] removed stale canonical ref ${r}`);
+    }
+  }
   const produced = readdirSync(join(root, outDir));
   const nodeFiles = produced.filter((f) => f.endsWith(".node"));
   if (nodeFiles.length === 0) {
@@ -177,6 +255,13 @@ async function runBuild(): Promise<void> {
     git(["update-ref", ref, oid]);
     console.log(`[build] recorded ${f} -> blob ${oid}`);
     console.log(`[build]   ref: ${ref}`);
+  }
+  // Once the full-sha canonical ref(s) exist, also publish a short alias that
+  // redirects to the recorded binary; it self-extends (7 -> 8 -> ...) on a
+  // prefix collision with another build, and updates in place on a re-record.
+  const canonicalOid = getRecordedOid(buildId);
+  if (canonicalOid) {
+    ensureShorthand(buildId, canonicalOid, prevOid);
   }
   console.log(`[build] done (buildId=${buildId})`);
 }
