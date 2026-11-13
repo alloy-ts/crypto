@@ -1,10 +1,10 @@
 {
-  "name": "repository",
+  "name": "repo",
   "version": "0.0.0",
-  "description": "Versioned repository for yumin-chen projects.",
+  "description": "Versioned repo for yumin-chen projects.",
   "keywords": [
     "git",
-    "repository",
+    "repo",
     "scm",
     "version-control"
   ],
@@ -12,7 +12,7 @@
   "author": "Yumin Chen",
   "repository": {
     "type": "git",
-    "url": "git+https://repo.chen.software/yumin-chen/repository.git"
+    "url": "git+https://repo.chen.software/yumin-chen/repo.git"
   },
   "type": "module",
   "exports": {
@@ -49,7 +49,7 @@
     "vite": "npm:@voidzero-dev/vite-plus-core@1.6.0"
   },
   "napi": {
-    "binaryName": "repository",
+    "binaryName": "repo",
     "targets": [
       "x86_64-apple-darwin",
       "aarch64-apple-darwin",

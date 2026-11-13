@@ -7,7 +7,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
 type ConfigEntry = { key: string; value: string };
 
-// Parse the top-level `config:` mapping from repository.manifest.yml.
+// Parse the top-level `config:` mapping from repo.manifest.yml.
 // Each entry is a list item of the form `  - key: value`; the value may itself
 // contain colons (e.g. an ssh public key), so we split only on the first colon.
 function parseManifestConfig(text: string): ConfigEntry[] {
@@ -75,10 +75,10 @@ function main(): void {
   console.log(`[setup] npm_lifecycle_event = ${lifecycleEvent || "(none)"}`);
   console.log(`[setup] npm_command = ${npmCommand || "(none)"}`);
 
-  const manifest = readFileSync(join(root, "repository.manifest.yml"), "utf8");
+  const manifest = readFileSync(join(root, "repo.manifest.yml"), "utf8");
   const entries = parseManifestConfig(manifest);
   if (entries.length === 0) {
-    throw new Error("repository.manifest.yml: no `config:` entries found");
+    throw new Error("repo.manifest.yml: no `config:` entries found");
   }
 
   const hooksPathEntry = entries.find((e) => e.key === "core.hooksPath");
@@ -111,7 +111,7 @@ function main(): void {
     console.log(`[setup] no build for lifecycle event "${lifecycleEvent || "none"}"`);
   }
 
-  console.log("[setup] repository setup complete");
+  console.log("[setup] repo setup complete");
 }
 
 main();

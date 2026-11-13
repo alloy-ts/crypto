@@ -4,12 +4,12 @@ Starter Template for Rust + TypeScript via NAPI-RS, Node-API (N-API) bindings.
 
 ## Getting Started
 
-1. Clone the repository
+1. Clone the repo
 2. Install dependencies
 3. Run the application
 
 ```bash
-git clone https://repo.chen.software/yumin-chen/repository.git
+git clone https://repo.chen.software/yumin-chen/repo.git
 cd starter-template
 npm install
 npm run start

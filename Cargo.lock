@@ -483,7 +483,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "repository"
+name = "repo"
 version = "0.0.0"
 dependencies = [
  "ed25519-dalek 2.2.0",
