@@ -1,31 +1,19 @@
 [package]
-name = "lib-crypto-native"
-version = "0.1.0"
+name = "repo"
+version = "0.0.0"
 edition = "2024"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-argon2-rust = "1.1.0"
-base64 = "0.22.1"
-boring-rustls-provider = "5.0.1"
-hex = "0.4.3"
-napi = { version = "3", features = ["serde-json"] }
-napi-derive = "3"
-num-traits = "0.2"
-rand = "0.10.3"
-ring = "0.17.14"
-rsa = { version = "0.9.10", features = ["sha2"] }
-rustls = { version = "0.23.45", features = ["ring"] }
-rustls-mbedcrypto-provider = "0.1.1"
-rustls-openssl = "0.4.2"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-sha1 = "0.10"
-sha2 = "0.10.8"
-simdutf8 = "0.1.5"
-x509-parser = "0.18.1"
+napi = { version = "3.14.2", features = ["serde-json"] }
+napi-derive = "3.6.12"
+futures = "0.3.34"
+serde = { version = "1.0.154", features = ["derive"] }
+serde_json = "1.0.154"
+slip10 = "0.4"
+ed25519-dalek = "2"
 
 [build-dependencies]
-napi-build = "2"
+napi-build = "2.6.0"

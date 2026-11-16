@@ -2,9 +2,10 @@ import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   pack: {
-    entry: ["./src/main.ts"],
+    entry: ["./dist/index.js"],
     format: "esm",
     outDir: "dist",
+    clean: false,
     exports: true,
     dts: {
       generator: "tsgo",
@@ -13,8 +14,20 @@ export default defineConfig({
       resolveDepSubpath: true,
     },
   },
+  test: {
+    include: ["src/**/*.{test,spec}.ts"],
+  },
   staged: {
     "*": "vp check --fix",
+    // Cargo-backed steps for Rust sources. A function task receives the matched
+    // staged files and controls invocation (lint-staged does not auto-append
+    // files to function tasks, and runs no shell). `cargo clippy --fix` runs on
+    // the whole crate; `cargo fmt -- <files>` formats only the staged files so
+    // unrelated working-tree .rs files are left untouched.
+    "*.rs": (files) => [
+      "cargo clippy --fix --all-targets --allow-dirty --allow-staged",
+      `cargo fmt -- ${files.join(" ")}`,
+    ],
   },
   fmt: {},
   lint: {

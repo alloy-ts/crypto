@@ -1,29 +1,55 @@
 {
-  "name": "@lib/crypto",
-  "version": "0.1.0",
-  "main": "index.js",
-  "types": "index.d.ts",
-  "files": [
-    "dist"
+  "name": "repo",
+  "version": "0.0.0",
+  "description": "Versioned repo for yumin-chen projects.",
+  "keywords": [
+    "git",
+    "repo",
+    "scm",
+    "version-control"
   ],
+  "license": "Unlicense",
+  "author": "Yumin Chen",
+  "repository": {
+    "type": "git",
+    "url": "git+https://repo.chen.software/yumin-chen/repo.git"
+  },
+  "type": "module",
   "exports": {
-    ".": "./index.js",
+    ".": "./dist/index.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "node build.mjs --platform",
-    "build:release": "node build.mjs --platform --release",
+    "build": "node --import @oxc-node/core/register build.ts",
     "dev": "vp pack --watch",
-    "start": "vp run src/main.ts",
-    "test": "node --test test.cjs src/*.test.ts",
-    "check": "vp check",
-    "fmt": "vp fmt",
-    "lint": "vp lint",
-    "prepublishOnly": "vp run build",
-    "prepare": "vp config"
+    "start": "vp run dist/index.js",
+    "test": "node --import @oxc-node/core/register --test && cargo test",
+    "check": "vp check && cargo check --all-targets",
+    "fmt": "vp fmt && cargo fmt",
+    "lint": "vp lint && cargo clippy --all-targets",
+    "fix": "vp fmt && cargo clippy --fix --all-targets --allow-dirty --allow-staged && vp check --fix",
+    "pack": "vp pack",
+    "prepublishOnly": "npm run build",
+    "install": "npm run build",
+    "prepare": "node --import @oxc-node/core/register scripts/setup.ts"
+  },
+  "devDependencies": {
+    "@emnapi/core": "^1.11.3",
+    "@emnapi/runtime": "^1.11.3",
+    "@napi-rs/cli": "^3.10.8",
+    "@oxc-node/core": "^0.1.7",
+    "@types/node": "^26.6.5",
+    "emnapi": "^1.11.3",
+    "vite-plus": "1.6.0"
+  },
+  "peerDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.6.0"
   },
   "napi": {
-    "binaryName": "lib-crypto",
+    "binaryName": "repo",
     "targets": [
       "x86_64-apple-darwin",
       "aarch64-apple-darwin",
@@ -41,25 +67,11 @@
       "wasm32-wasip1-threads"
     ]
   },
-  "devDependencies": {
-    "@emnapi/core": "^2.0.0-alpha.4",
-    "@emnapi/runtime": "^2.0.0-alpha.4",
-    "@napi-rs/cli": "^3",
-    "@types/node": "^26.6.2",
-    "emnapi": "^2.0.0-alpha.4",
-    "vite-plus": "^1.0.0-rc.1"
-  },
-  "peerDependencies": {
-    "typescript": "^7.0.2"
-  },
-  "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0-rc.1"
-  },
   "devEngines": {
     "packageManager": {
       "name": "npm",
       "version": "11.11.0",
-      "onFail": "download"
+      "onFail": "warn"
     }
   }
 }

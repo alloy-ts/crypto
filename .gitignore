@@ -1,18 +1,11 @@
-# compiled output files and executables
-build
-out
-dist
-target
+# Dependencies
+node_modules/
 
-# dependencies
-vendor
-node_modules
-
-# log files
-logs
+# Log files
 *.log
 
-# NAPI generated files
-*.node
-index.js
-index.d.ts
+# Generated artifacts
+target/
+dist/
+
+.vitest/

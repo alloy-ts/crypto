@@ -1,35 +1,19 @@
-#[path = "crypto_hasher.rs"]
-pub(crate) mod crypto_hasher;
+use napi_derive::napi;
 
-#[path = "agreement.rs"]
-pub(crate) mod agreement;
+pub mod crypto;
 
-#[path = "signature.rs"]
-pub(crate) mod signature;
+#[napi]
+pub fn add(left: u32, right: u32) -> u32 {
+    left + right
+}
 
-#[path = "key_object.rs"]
-pub(crate) mod key_object;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[path = "random.rs"]
-pub(crate) mod random;
-
-#[path = "aead.rs"]
-pub(crate) mod aead;
-
-#[path = "argon2.rs"]
-pub(crate) mod argon2;
-
-#[path = "ecdh.rs"]
-pub(crate) mod ecdh;
-
-#[path = "hmac.rs"]
-pub(crate) mod hmac;
-
-#[path = "pbkdf2.rs"]
-pub(crate) mod pbkdf2;
-
-#[path = "rsa.rs"]
-pub(crate) mod rsa;
-
-#[path = "tls.rs"]
-pub(crate) mod tls;
+    #[test]
+    fn it_works() {
+        let result = add(2, 2);
+        assert_eq!(result, 4);
+    }
+}
