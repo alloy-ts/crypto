@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createPublicKey, verify } from "node:crypto";
-import { MasterKey, sealEnvelope } from "../dist/index.js";
+import { MasterKey, sealEnvelope } from "../../dist/index.js";
 
 void test("envelopes enforce context, integrity, delegation and rotation through Node", () => {
   const alice = new MasterKey(Buffer.alloc(32, 1));
