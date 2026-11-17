@@ -1,8 +1,8 @@
-# Starter Template
+# Crypto
 
-## Envelope encryption API
+## Envelope Encryption
 
-The Node API exports `MasterKey` and `sealEnvelope`. Existing `CryptoKey`
+The N-API bindings export `MasterKey` and `sealEnvelope`. Existing `CryptoKey`
 SLIP-0010 signing behavior is unchanged. The new HKDF derivation is a separate
 protocol and produces different keys.
 
