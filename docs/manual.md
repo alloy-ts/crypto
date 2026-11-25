@@ -1,9 +1,11 @@
 # Crypto manual
 
-This package provides two Node.js APIs backed by Rust:
+This package provides a Rust cryptographic core and Node.js bindings:
 
-- `MasterKey` and `sealEnvelope` implement deterministic child-key derivation,
-  Ed25519 signing, and multi-recipient envelope encryption.
+- `crypto::core` owns master-key generation and deterministic Ed25519/X25519
+  identity derivation in one module.
+- The Node.js `MasterKey` and `sealEnvelope` exports expose signing and
+  multi-recipient envelope encryption without exposing derived private keys.
 - `CryptoKey` preserves the earlier SLIP-0010 Ed25519 signing API.
 
 The envelope protocol is a custom construction. It has automated security tests,
@@ -31,13 +33,25 @@ name.
 
 ## Master keys
 
-`MasterKey` accepts exactly 32 bytes of high-entropy secret material.
+For a process-local or otherwise ephemeral identity, let the binding generate a
+master key directly with the operating system CSPRNG:
+
+```ts
+import { MasterKey } from "../dist/index.js";
+
+const ephemeralMaster = MasterKey.generate();
+```
+
+`MasterKey.generate()` intentionally provides no method to export its secret.
+For a persistent identity, generate and store exactly 32 bytes of high-entropy
+secret material outside the binding, then reconstruct `MasterKey` when needed:
 
 ```ts
 import { randomBytes } from "node:crypto";
 import { MasterKey } from "../dist/index.js";
 
 const masterBytes = randomBytes(32);
+// Persist masterBytes in secure storage before releasing this Buffer.
 const master = new MasterKey(masterBytes);
 ```
 
@@ -51,11 +65,51 @@ The Rust `MasterKey` value and temporary Rust-derived keys are zeroized when
 dropped. The original input `Buffer`, returned plaintext `Buffer`s, and other
 JavaScript-managed memory remain the caller's responsibility.
 
+## Rust core identity API
+
+The Rust API is implemented in the single `crypto::core` module.
+
+```rust
+use repo::crypto::core::MasterKey;
+
+let master = MasterKey::generate()?;
+let identity = master.derive_identity("repo:01932a4f-7b10-7000", 1)?;
+
+let signing_public = identity.signing_public_key();
+let encryption_public = identity.encryption_public_key();
+let signature = identity.sign(b"commit payload");
+# Ok::<(), repo::crypto::core::CoreError>(())
+```
+
+Use `MasterKey::from_bytes([u8; 32])` to reconstruct a stored master key.
+`derive_identity(purpose, version)` currently accepts version `1`; unsupported
+versions return `CoreError::UnsupportedVersion` instead of silently selecting a
+new derivation protocol. Empty or oversized purposes return
+`CoreError::InvalidPurpose`, and operating-system randomness failures return
+`CoreError::RandomFailure`.
+
+`IdentityKeys` keeps both private keys private. It exposes only their public
+keys and signing as public operations; the X25519 secret accessor is restricted
+to the crate so envelope encryption can use it internally. Neither the master
+secret nor derived private keys can be serialized through this API.
+
 ## Purpose strings and child keys
 
 A purpose string selects a deterministic child key. The same master key and
 purpose always produce the same child, while different purposes and key types
 produce independent keys through domain-separated HKDF-SHA256.
+
+The Node.js methods always use derivation protocol version 1. Rust callers pass
+that protocol version explicitly to `derive_identity`. Version 1 uses the
+master key as HKDF input key material, the UTF-8 purpose as HKDF `info`, and
+these distinct HKDF salts:
+
+- `alloy/master/ed25519/v1` for the Ed25519 signing seed;
+- `alloy/master/x25519/v1` for the X25519 encryption secret.
+
+The derivation protocol version is separate from an application's key version.
+Keep the latter in the purpose string so an application can rotate identities
+without changing the cryptographic derivation protocol.
 
 Use an unambiguous, stable convention that includes the entity and key version:
 
@@ -140,8 +194,60 @@ const plaintext = carol.open(purpose, context, withCarol);
 Every existing recipient can perform this operation. The envelope MAC proves
 that the recipient list was produced by someone holding the DEK; it does not
 prove administrator approval or sender identity. Enforce collaboration policy
-before calling `addRecipient`, and use an application-level signature when a
+before calling `addRecipient`, and require a verified signed manifest when a
 specific administrator must authorize membership changes.
+
+## Authorize recipients with a signed manifest
+
+A repository manifest binds a stable 32-byte repository ID, an unsigned 64-bit
+generation, the exact recipient public-key set, and the SHA-256 hash of the
+exact envelope string. It is signed with a separately derived Ed25519
+administrator identity.
+
+```ts
+import { randomBytes } from "node:crypto";
+import { verifyManifest } from "../dist/index.js";
+
+// Generate once and retain as trusted repository metadata.
+const repositoryId = randomBytes(32);
+const administratorPurpose = "repo:01932a4f-7b10-7000/administrator/key-version:1";
+const administratorPublicKey = alice.signingPublicKey(administratorPurpose);
+
+const signedManifest = alice.signManifest(
+  administratorPurpose,
+  repositoryId,
+  1n,
+  [alice.encryptionPublicKey(purpose), bob.encryptionPublicKey(purpose)],
+  envelope,
+);
+
+verifyManifest(
+  signedManifest,
+  repositoryId,
+  1n, // independently trusted minimum generation
+  [administratorPublicKey],
+  envelope,
+); // returns true or throws
+```
+
+The repository ID, minimum generation, and trusted administrator public keys
+must come from trusted state outside the signed manifest. Reading those values
+from the manifest itself would let an attacker choose the policy used to verify
+their own data.
+
+Both generation arguments are JavaScript `bigint` values so the complete Rust
+`u64` range is represented without losing precision. `verifyManifest` rejects
+an untrusted signer, a stale generation, a different repository, any signature
+change, recipient differences, and even a byte-level change to the envelope
+string. Preserve the envelope string exactly as signed.
+
+The Rust equivalents are `RepositoryManifest::new`, `sign_manifest`,
+`TrustPolicy::new`, and `verify_manifest` in `crypto::manifest`. Rust callers
+receive typed `CryptoError` failures from `crypto::error`.
+
+Signing a manifest does not itself publish data or stop a recipient from
+creating an unauthorized envelope. Applications must verify the manifest
+against trusted policy before accepting, storing, or opening an envelope.
 
 ## Rotate or remove recipients
 
@@ -177,6 +283,9 @@ const signature = master.signChild(purpose, message);
 
 Verification is performed by the receiving application's Ed25519 implementation.
 Sign a canonical byte representation rather than ambiguous JSON or text.
+
+Rust callers can perform the same operation on an `IdentityKeys` value with
+`identity.sign(message)` and distribute `identity.signing_public_key()`.
 
 ## Legacy `CryptoKey`
 
@@ -240,17 +349,22 @@ unsupported protocols, and size-limit violations. Treat every failure as a
 rejected envelope. Do not return partially decrypted data or retry with context
 values taken from the envelope.
 
+Rust APIs return typed `CryptoError` values; `CoreError` remains an alias for
+core callers. Envelope protocol internals deliberately collapse decryption and
+authentication failures before they cross the Node boundary.
+
 Avoid exposing detailed decryption errors across a trust boundary. A single
 generic failure prevents callers from using error differences to inspect
 recipient membership or validation stages.
 
 ## Security properties and limits
 
-The protocol provides confidentiality and integrity for the payload, context,
-and complete recipient list under the assumptions of the selected primitives.
-It does not provide:
+The envelope protocol provides confidentiality and integrity for the payload,
+context, and complete recipient list under the assumptions of the selected
+primitives. A successfully verified manifest additionally authenticates the
+administrator and authorized recipient set against caller-supplied trust
+policy. The system does not provide:
 
-- sender identity or administrator authorization;
 - rollback protection for older valid envelopes;
 - recovery when the master key or purpose metadata is lost;
 - revocation of historical ciphertext or previously disclosed plaintext;
@@ -264,11 +378,14 @@ secrecy. Do not reuse the static envelope protocol as a session handshake.
 
 Before deploying:
 
-1. Generate and store each 32-byte master key securely.
+1. Generate and store each persistent 32-byte master key securely; use
+   `MasterKey.generate()` only when an unexportable process-local key is
+   appropriate.
 2. Define stable, versioned purpose and context formats.
 3. Authenticate every recipient public key.
-4. Enforce authorization around recipient additions and rotations.
-5. Keep trusted state when rollback protection is required.
+4. Verify a signed manifest before accepting recipient additions or rotations.
+5. Keep repository IDs, administrator keys, and latest accepted generations in
+   trusted state for authorization and rollback protection.
 6. Plan key backup, loss recovery, rotation, and historical-data retention.
 7. Avoid logging master keys, plaintext, derived private keys, or decrypted
    buffers.

@@ -7,7 +7,7 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-napi = { version = "3.14.2", features = ["serde-json"] }
+napi = { version = "3.14.2", features = ["napi6", "serde-json"] }
 napi-derive = "3.6.12"
 futures = "0.3.34"
 serde = { version = "1.0.154", features = ["derive"] }
@@ -21,6 +21,7 @@ chacha20poly1305 = "0.10"
 rand_core = { version = "0.6", features = ["getrandom"] }
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 zeroize = { version = "1", features = ["derive"] }
+thiserror = "2"
 
 [build-dependencies]
 napi-build = "2.6.0"

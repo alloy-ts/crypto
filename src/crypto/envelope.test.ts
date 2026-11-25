@@ -40,3 +40,14 @@ void test("derived Ed25519 signatures verify with Node's independent implementat
   assert(verify(null, message, publicKey, master.signChild(purpose, message)));
   assert(!verify(null, Buffer.from("tampered"), publicKey, master.signChild(purpose, message)));
 });
+
+void test("master keys can be generated securely without exposing secret bytes", () => {
+  const first = MasterKey.generate();
+  const second = MasterKey.generate();
+  const purpose = "device:generated/v1";
+
+  assert.equal(first.signingPublicKey(purpose).length, 32);
+  assert.equal(first.encryptionPublicKey(purpose).length, 32);
+  assert.notDeepEqual(first.signingPublicKey(purpose), second.signingPublicKey(purpose));
+  assert.throws(() => first.signingPublicKey(""));
+});

@@ -1,4 +1,6 @@
 //! Version 1 envelope protocol. Context must be supplied by the trusted caller.
+use super::core::{IdentityKeys, MasterKey};
+use super::error::{CryptoError, CryptoResult};
 use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
     aead::{Aead, KeyInit, Payload},
@@ -11,19 +13,18 @@ use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use x25519_dalek::{EphemeralSecret, PublicKey, StaticSecret};
-use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
+use zeroize::Zeroizing;
 
 const SUITE: &str = "alloy-envelope-v1/x25519-hkdf-sha256-xchacha20poly1305-hmacsha256";
 const MAX_DATA: usize = 16 * 1024 * 1024;
 const MAX_JSON: usize = 80 * 1024 * 1024;
 const MAX_RECIPIENTS: usize = 256;
-type Result<T> = std::result::Result<T, &'static str>;
 
-fn random<const N: usize>() -> Result<[u8; N]> {
+fn random<const N: usize>() -> CryptoResult<[u8; N]> {
     let mut bytes = [0; N];
     OsRng
         .try_fill_bytes(&mut bytes)
-        .map_err(|_| "random generator failed")?;
+        .map_err(|_| CryptoError::RandomFailure)?;
     Ok(bytes)
 }
 
@@ -66,13 +67,13 @@ struct Envelope {
     tag: [u8; 32],
 }
 
-fn id(public: &PublicKey) -> [u8; 32] {
+pub(crate) fn recipient_id(public: &PublicKey) -> [u8; 32] {
     Sha256::digest(transcript(&[b"alloy/recipient/v1", public.as_bytes()])).into()
 }
 
-fn context_check(context: &str) -> Result<()> {
+fn context_check(context: &str) -> CryptoResult<()> {
     if context.is_empty() || context.len() > 4096 {
-        return Err("invalid context length");
+        return Err(CryptoError::InvalidContext);
     }
     Ok(())
 }
@@ -110,18 +111,16 @@ impl Envelope {
         self.tag = self.mac(dek).finalize().into_bytes().into();
     }
 
-    fn parse(json: &str, expected: &str) -> Result<Self> {
-        context_check(expected)?;
+    fn decode(json: &str) -> CryptoResult<Self> {
         if json.len() > MAX_JSON {
-            return Err("envelope too large");
+            return Err(CryptoError::EnvelopeTooLarge);
         }
-        let env: Self = serde_json::from_str(json).map_err(|_| "invalid envelope encoding")?;
+        let env: Self =
+            serde_json::from_str(json).map_err(|_| CryptoError::InvalidEnvelopeEncoding)?;
         if env.version != 1 || env.suite != SUITE {
-            return Err("unsupported envelope protocol");
+            return Err(CryptoError::UnsupportedEnvelopeProtocol);
         }
-        if env.context != expected {
-            return Err("context mismatch");
-        }
+        context_check(&env.context)?;
         if env.ciphertext.len() < 16
             || env.ciphertext.len() > MAX_DATA + 16
             || env.recipients.is_empty()
@@ -129,21 +128,30 @@ impl Envelope {
             || env.recipients.iter().any(|s| s.wrapped.len() != 48)
             || env.recipients.windows(2).any(|s| s[0].id >= s[1].id)
         {
-            return Err("invalid envelope structure");
+            return Err(CryptoError::InvalidEnvelopeStructure);
         }
         Ok(env)
     }
 
-    fn unwrap(&self, secret: &StaticSecret) -> Result<Zeroizing<[u8; 32]>> {
+    fn parse(json: &str, expected: &str) -> CryptoResult<Self> {
+        context_check(expected)?;
+        let env = Self::decode(json)?;
+        if env.context != expected {
+            return Err(CryptoError::ContextMismatch);
+        }
+        Ok(env)
+    }
+
+    fn unwrap(&self, secret: &StaticSecret) -> CryptoResult<Zeroizing<[u8; 32]>> {
         let public = PublicKey::from(secret);
         let slot = self
             .recipients
             .iter()
-            .find(|s| s.id == id(&public))
-            .ok_or("decryption failed")?;
+            .find(|s| s.id == recipient_id(&public))
+            .ok_or(CryptoError::DecryptionFailed)?;
         let shared = secret.diffie_hellman(&PublicKey::from(slot.ephemeral));
         if !shared.was_contributory() {
-            return Err("invalid X25519 public key");
+            return Err(CryptoError::DecryptionFailed);
         }
         let aad = transcript(&[&self.aad(), &slot.id, &slot.ephemeral, public.as_bytes()]);
         let kek = derive(shared.as_bytes(), b"alloy/envelope/wrap/v1", &aad);
@@ -157,27 +165,27 @@ impl Envelope {
                         aad: &aad,
                     },
                 )
-                .map_err(|_| "decryption failed")?,
+                .map_err(|_| CryptoError::DecryptionFailed)?,
         );
         if bytes.len() != 32 {
-            return Err("decryption failed");
+            return Err(CryptoError::DecryptionFailed);
         }
         let mut dek = Zeroizing::new([0; 32]);
         dek.copy_from_slice(&bytes);
         self.mac(dek.as_ref())
             .verify_slice(&self.tag)
-            .map_err(|_| "decryption failed")?;
+            .map_err(|_| CryptoError::DecryptionFailed)?;
         Ok(dek)
     }
 
-    fn wrap(&self, dek: &[u8], public: &PublicKey) -> Result<Slot> {
+    fn wrap(&self, dek: &[u8], public: &PublicKey) -> CryptoResult<Slot> {
         let ephemeral = EphemeralSecret::random_from_rng(OsRng);
         let eph = PublicKey::from(&ephemeral);
         let shared = ephemeral.diffie_hellman(public);
         if !shared.was_contributory() {
-            return Err("invalid X25519 public key");
+            return Err(CryptoError::InvalidPublicKey);
         }
-        let recipient = id(public);
+        let recipient = recipient_id(public);
         let aad = transcript(&[&self.aad(), &recipient, eph.as_bytes(), public.as_bytes()]);
         let kek = derive(shared.as_bytes(), b"alloy/envelope/wrap/v1", &aad);
         let nonce = random()?;
@@ -190,7 +198,7 @@ impl Envelope {
                     aad: &aad,
                 },
             )
-            .map_err(|_| "encryption failed")?;
+            .map_err(|_| CryptoError::EncryptionFailed)?;
         Ok(Slot {
             id: recipient,
             ephemeral: *eph.as_bytes(),
@@ -199,13 +207,13 @@ impl Envelope {
         })
     }
 
-    fn seal(context: &str, plaintext: &[u8], recipients: &[[u8; 32]]) -> Result<Self> {
+    fn seal(context: &str, plaintext: &[u8], recipients: &[[u8; 32]]) -> CryptoResult<Self> {
         context_check(context)?;
         if plaintext.len() > MAX_DATA {
-            return Err("plaintext too large");
+            return Err(CryptoError::PlaintextTooLarge);
         }
         if recipients.is_empty() || recipients.len() > MAX_RECIPIENTS {
-            return Err("invalid recipient count");
+            return Err(CryptoError::InvalidRecipientCount);
         }
         let dek = Zeroizing::new(random::<32>()?);
         let mut env = Self {
@@ -223,7 +231,7 @@ impl Envelope {
         }
         env.recipients.sort_by_key(|s| s.id);
         if env.recipients.windows(2).any(|s| s[0].id == s[1].id) {
-            return Err("duplicate recipient");
+            return Err(CryptoError::DuplicateRecipient);
         }
         env.ciphertext = XChaCha20Poly1305::new_from_slice(dek.as_ref())
             .unwrap()
@@ -234,12 +242,12 @@ impl Envelope {
                     aad: &env.aad(),
                 },
             )
-            .map_err(|_| "encryption failed")?;
+            .map_err(|_| CryptoError::EncryptionFailed)?;
         env.authenticate(dek.as_ref());
         Ok(env)
     }
 
-    fn open(&self, secret: &StaticSecret) -> Result<Vec<u8>> {
+    fn open(&self, secret: &StaticSecret) -> CryptoResult<Vec<u8>> {
         let dek = self.unwrap(secret)?;
         XChaCha20Poly1305::new_from_slice(dek.as_ref())
             .unwrap()
@@ -250,12 +258,20 @@ impl Envelope {
                     aad: &self.aad(),
                 },
             )
-            .map_err(|_| "decryption failed")
+            .map_err(|_| CryptoError::DecryptionFailed)
     }
 }
 
-fn api<T>(value: Result<T>) -> napi::Result<T> {
-    value.map_err(napi::Error::from_reason)
+pub(crate) fn envelope_recipient_ids(json: &str) -> CryptoResult<Vec<[u8; 32]>> {
+    Ok(Envelope::decode(json)?
+        .recipients
+        .into_iter()
+        .map(|slot| slot.id)
+        .collect())
+}
+
+fn api<T>(value: CryptoResult<T>) -> napi::Result<T> {
+    value.map_err(Into::into)
 }
 fn public_keys(keys: Vec<Buffer>) -> napi::Result<Vec<[u8; 32]>> {
     keys.iter()
@@ -267,65 +283,17 @@ fn public_keys(keys: Vec<Buffer>) -> napi::Result<Vec<[u8; 32]>> {
         .collect()
 }
 fn json(env: &Envelope) -> napi::Result<String> {
-    serde_json::to_string(env).map_err(|_| napi::Error::from_reason("serialization failed"))
-}
-
-/// A high-entropy 32-byte root secret. Passwords must be strengthened separately.
-#[napi]
-#[derive(Zeroize, ZeroizeOnDrop)]
-pub struct MasterKey {
-    bytes: [u8; 32],
+    serde_json::to_string(env).map_err(|_| CryptoError::SerializationFailed.into())
 }
 
 impl MasterKey {
-    fn child(&self, domain: &[u8], purpose: &str) -> Result<Zeroizing<[u8; 32]>> {
-        context_check(purpose)?;
-        Ok(derive(&self.bytes, domain, purpose.as_bytes()))
-    }
-    fn encryption(&self, purpose: &str) -> Result<StaticSecret> {
-        Ok(StaticSecret::from(
-            *self.child(b"alloy/master/x25519/v1", purpose)?,
-        ))
+    fn envelope_identity(&self, purpose: &str) -> napi::Result<IdentityKeys> {
+        self.derive_identity(purpose, 1).map_err(Into::into)
     }
 }
 
 #[napi]
 impl MasterKey {
-    #[napi(constructor)]
-    pub fn new(bytes: Buffer) -> napi::Result<Self> {
-        Ok(Self {
-            bytes: bytes
-                .as_ref()
-                .try_into()
-                .map_err(|_| napi::Error::from_reason("expected 32-byte master secret"))?,
-        })
-    }
-    #[napi]
-    pub fn encryption_public_key(&self, purpose: String) -> napi::Result<Buffer> {
-        Ok(PublicKey::from(&api(self.encryption(&purpose))?)
-            .as_bytes()
-            .to_vec()
-            .into())
-    }
-    #[napi]
-    pub fn signing_public_key(&self, purpose: String) -> napi::Result<Buffer> {
-        let seed = api(self.child(b"alloy/master/ed25519/v1", &purpose))?;
-        Ok(ed25519_dalek::SigningKey::from_bytes(&seed)
-            .verifying_key()
-            .to_bytes()
-            .to_vec()
-            .into())
-    }
-    #[napi]
-    pub fn sign_child(&self, purpose: String, message: Buffer) -> napi::Result<Buffer> {
-        use ed25519_dalek::Signer;
-        let seed = api(self.child(b"alloy/master/ed25519/v1", &purpose))?;
-        Ok(ed25519_dalek::SigningKey::from_bytes(&seed)
-            .sign(&message)
-            .to_bytes()
-            .to_vec()
-            .into())
-    }
     #[napi]
     pub fn open(
         &self,
@@ -334,7 +302,8 @@ impl MasterKey {
         envelope: String,
     ) -> napi::Result<Buffer> {
         let env = api(Envelope::parse(&envelope, &expected_context))?;
-        Ok(api(env.open(&api(self.encryption(&purpose))?))?.into())
+        let identity = self.envelope_identity(&purpose)?;
+        Ok(api(env.open(identity.encryption_secret()))?.into())
     }
     /// Every existing recipient can delegate. Application policy must enforce admin rules.
     #[napi]
@@ -346,14 +315,15 @@ impl MasterKey {
         public_key: Buffer,
     ) -> napi::Result<String> {
         let mut env = api(Envelope::parse(&envelope, &expected_context))?;
-        let dek = api(env.unwrap(&api(self.encryption(&purpose))?))?;
+        let identity = self.envelope_identity(&purpose)?;
+        let dek = api(env.unwrap(identity.encryption_secret()))?;
         let keys = public_keys(vec![public_key])?;
         let slot = api(env.wrap(dek.as_ref(), &PublicKey::from(keys[0])))?;
         if env.recipients.iter().any(|s| s.id == slot.id) {
-            return Err(napi::Error::from_reason("duplicate recipient"));
+            return Err(CryptoError::DuplicateRecipient.into());
         }
         if env.recipients.len() >= MAX_RECIPIENTS {
-            return Err(napi::Error::from_reason("too many recipients"));
+            return Err(CryptoError::TooManyRecipients.into());
         }
         env.recipients.push(slot);
         env.recipients.sort_by_key(|s| s.id);
@@ -370,7 +340,8 @@ impl MasterKey {
         recipients: Vec<Buffer>,
     ) -> napi::Result<String> {
         let env = api(Envelope::parse(&envelope, &expected_context))?;
-        let plain = Zeroizing::new(api(env.open(&api(self.encryption(&purpose))?))?);
+        let identity = self.envelope_identity(&purpose)?;
+        let plain = Zeroizing::new(api(env.open(identity.encryption_secret()))?);
         json(&api(Envelope::seal(
             &expected_context,
             &plain,
@@ -427,38 +398,6 @@ mod tests {
         bad = env.clone();
         bad.recipients[0].id[0] ^= 1;
         assert!(bad.open(&secret).is_err());
-    }
-
-    #[test]
-    fn hkdf_vector_and_domain_separation() {
-        // RFC 5869 test case 1 verifies the underlying extract/expand convention.
-        let out = derive(
-            &[0x0b; 22],
-            &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-            &[0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9],
-        );
-        assert_eq!(
-            *out,
-            [
-                0x3c, 0xb2, 0x5f, 0x25, 0xfa, 0xac, 0xd5, 0x7a, 0x90, 0x43, 0x4f, 0x64, 0xd0, 0x36,
-                0x2f, 0x2a, 0x2d, 0x2d, 0x0a, 0x90, 0xcf, 0x1a, 0x5a, 0x4c, 0x5d, 0xb0, 0x2d, 0x56,
-                0xec, 0xc4, 0xc5, 0xbf
-            ]
-        );
-        let master = MasterKey { bytes: [42; 32] };
-        let a = master.child(b"alloy/master/ed25519/v1", "repo:1").unwrap();
-        assert_eq!(
-            *a,
-            *master.child(b"alloy/master/ed25519/v1", "repo:1").unwrap()
-        );
-        assert_ne!(
-            *a,
-            *master.child(b"alloy/master/ed25519/v1", "repo:2").unwrap()
-        );
-        assert_ne!(
-            *a,
-            *master.child(b"alloy/master/x25519/v1", "repo:1").unwrap()
-        );
     }
 
     #[test]
